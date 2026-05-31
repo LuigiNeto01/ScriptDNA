@@ -1,0 +1,30 @@
+{
+  "name": "cta_ending",
+  "description": "Segmentos finais com CTA explícito",
+  "input_segments": [
+    {
+      "start": 40.0,
+      "end": 44.0,
+      "text": "Então agora você sabe exatamente como fazer isso",
+      "word_count": 9
+    },
+    {
+      "start": 44.0,
+      "end": 48.0,
+      "text": "Se esse vídeo te ajudou deixa o like e se inscreve no canal",
+      "word_count": 12
+    },
+    {
+      "start": 48.0,
+      "end": 52.0,
+      "text": "Comenta aqui embaixo qual tema você quer no próximo vídeo",
+      "word_count": 11
+    }
+  ],
+  "expected": {
+    "has_cta_beat": true,
+    "has_payoff_beat": true,
+    "total_beats_min": 2,
+    "total_beats_max": 3
+  }
+}

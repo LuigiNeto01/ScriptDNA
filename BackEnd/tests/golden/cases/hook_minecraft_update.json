@@ -1,0 +1,34 @@
+{
+  "name": "hook_minecraft_update",
+  "description": "Hook clássico de vídeo de gaming sobre atualização do Minecraft",
+  "input_segments": [
+    {
+      "start": 0.0,
+      "end": 2.5,
+      "text": "Isso vai mudar o Minecraft para sempre",
+      "word_count": 7
+    },
+    {
+      "start": 2.5,
+      "end": 6.0,
+      "text": "A nova atualização trouxe um mob que ninguém esperava",
+      "word_count": 9
+    },
+    {
+      "start": 6.0,
+      "end": 10.0,
+      "text": "E o mais louco é que ele aparece só de noite",
+      "word_count": 10
+    }
+  ],
+  "expected": {
+    "first_beat": {
+      "beat_type": "hook",
+      "intensity_score_min": 0.7,
+      "techniques_must_include": ["curiosity_gap"],
+      "has_attention_goal": true
+    },
+    "total_beats_min": 1,
+    "total_beats_max": 3
+  }
+}

@@ -1,0 +1,297 @@
+import asyncio
+import os
+import tempfile
+import uuid
+from pathlib import Path
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from yt_dlp import YoutubeDL
+
+from app.agents.analysis_agent import AnalysisAgent
+from app.agents.transcription_agent import TranscriptionAgent
+from app.core.celery_app import celery_app
+from app.core.openai_client import get_openai_client
+from app.db.session import make_session_factory
+from app.models import (
+    ScriptBeat,
+    SegmentTechnique,
+    Technique,
+    TranscriptSegment,
+    Video,
+    VideoStatus,
+)
+
+
+def _run_async(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+def process_video_upload(self, video_id: str, file_path: str):
+    try:
+        _run_async(_process_upload(self, video_id, file_path))
+    except Exception as exc:
+        _run_async(_set_error(video_id))
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+def process_video_text(self, video_id: str, text: str):
+    try:
+        _run_async(_process_text(self, video_id, text))
+    except Exception as exc:
+        _run_async(_set_error(video_id))
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+def process_video_url(self, video_id: str, url: str):
+    try:
+        _run_async(_process_url(self, video_id, url))
+    except Exception as exc:
+        _run_async(_set_error(video_id))
+        raise self.retry(exc=exc)
+
+
+def _report_progress(task, progress: float, current_step: str):
+    task.update_state(
+        state="PROGRESS",
+        meta={"progress": progress, "current_step": current_step},
+    )
+
+
+async def _process_upload(task, video_id: str, file_path: str, url_meta: dict | None = None):
+    vid = uuid.UUID(video_id)
+    session_factory = make_session_factory()
+    async with session_factory() as db:
+        if url_meta:
+            video = await db.get(Video, vid)
+            if video:
+                if url_meta.get("title"):
+                    video.title = url_meta["title"][:500]
+                if url_meta.get("view_count") is not None:
+                    video.view_count = url_meta["view_count"]
+                if url_meta.get("like_count") is not None:
+                    video.like_count = url_meta["like_count"]
+                if url_meta.get("creator_name") and not video.creator_name:
+                    video.creator_name = url_meta["creator_name"][:200]
+                await db.commit()
+
+        _report_progress(task, 0.1, "transcribing")
+        await _update_status(db, vid, VideoStatus.TRANSCRIBING)
+
+        agent = TranscriptionAgent()
+        segments_data = await agent.run(file_path)
+
+        await _save_segments_and_analyze(task, db, vid, segments_data)
+
+
+async def _process_text(task, video_id: str, text: str):
+    vid = uuid.UUID(video_id)
+    session_factory = make_session_factory()
+    async with session_factory() as db:
+        _report_progress(task, 0.1, "transcribing")
+        await _update_status(db, vid, VideoStatus.TRANSCRIBING)
+
+        agent = TranscriptionAgent()
+        segments_data = await agent.run_from_text(text)
+
+        await _save_segments_and_analyze(task, db, vid, segments_data)
+
+
+async def _process_url(task, video_id: str, url: str):
+    file_path, meta = await asyncio.to_thread(_download_media_from_url, url)
+    try:
+        await _process_upload(task, video_id, file_path, url_meta=meta)
+    finally:
+        parent = Path(file_path).parent
+        try:
+            os.unlink(file_path)
+        except OSError:
+            pass
+        try:
+            parent.rmdir()
+        except OSError:
+            pass
+
+
+def _download_media_from_url(url: str) -> tuple[str, dict]:
+    tmp_dir = tempfile.mkdtemp(prefix="scriptdna-url-")
+    output_template = str(Path(tmp_dir) / "%(id)s.%(ext)s")
+    options = {
+        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[ext=mp4]/best",
+        "outtmpl": output_template,
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "retries": 3,
+        "socket_timeout": 30,
+    }
+
+    # OAuth2 para autenticacao no YouTube (funciona no Docker sem browser)
+    # Token salvo em /data/oauth2_token (volume persistente)
+    options["username"] = "oauth2"
+    options["password"] = ""
+
+    with YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url, download=True)
+        meta = {
+            "title": info.get("title"),
+            "view_count": info.get("view_count"),
+            "like_count": info.get("like_count"),
+            "creator_name": info.get("uploader") or info.get("channel"),
+        }
+
+        downloaded = info.get("requested_downloads") or []
+        if downloaded and downloaded[0].get("filepath"):
+            return downloaded[0]["filepath"], meta
+
+        candidate = Path(ydl.prepare_filename(info))
+        if candidate.exists():
+            return str(candidate), meta
+
+    files = [path for path in Path(tmp_dir).iterdir() if path.is_file()]
+    if files:
+        return str(files[0]), meta
+
+    raise ValueError("Nao foi possivel baixar a midia da URL")
+
+
+async def _save_segments_and_analyze(
+    task, db: AsyncSession, video_id: uuid.UUID, segments_data: list[dict]
+):
+    await _clear_existing_analysis(db, video_id)
+
+    segments = []
+    for seg in segments_data:
+        segment = TranscriptSegment(
+            video_id=video_id,
+            start_time=seg["start"],
+            end_time=seg["end"],
+            text=seg["text"],
+            word_count=seg["word_count"],
+            position_percent=seg["position_percent"],
+        )
+        db.add(segment)
+        segments.append(segment)
+
+    video = await db.get(Video, video_id)
+    if video and segments_data:
+        video.duration_seconds = int(max(seg["end"] for seg in segments_data))
+
+    await db.commit()
+
+    _report_progress(task, 0.4, "analyzing")
+    await _update_status(db, video_id, VideoStatus.ANALYZING)
+    analysis_agent = AnalysisAgent()
+    analysis_result = await analysis_agent.run(segments_data)
+
+    for beat_data in analysis_result.get("beats", []):
+        idx = beat_data.get("segment_index", 0)
+        segment = segments[idx] if idx < len(segments) else None
+
+        beat = ScriptBeat(
+            video_id=video_id,
+            segment_id=segment.id if segment else None,
+            beat_type=beat_data["beat_type"],
+            attention_goal=beat_data.get("attention_goal"),
+            curiosity_question=beat_data.get("curiosity_question"),
+            retention_function=beat_data.get("retention_function"),
+            emotion=beat_data.get("emotion"),
+            intensity_score=beat_data.get("intensity_score"),
+        )
+        db.add(beat)
+
+        if segment:
+            for tech_data in beat_data.get("techniques", []):
+                technique = await _get_or_create_technique(db, tech_data["name"])
+                st = SegmentTechnique(
+                    segment_id=segment.id,
+                    technique_id=technique.id,
+                    confidence=tech_data.get("confidence"),
+                    evidence=tech_data.get("evidence"),
+                )
+                db.add(st)
+
+    await db.commit()
+
+    _report_progress(task, 0.7, "embedding")
+    await _update_status(db, video_id, VideoStatus.EMBEDDING)
+    await _generate_embeddings(db, video_id)
+
+    _report_progress(task, 1.0, "done")
+    await _update_status(db, video_id, VideoStatus.DONE)
+
+
+async def _clear_existing_analysis(db: AsyncSession, video_id: uuid.UUID):
+    segment_ids = select(TranscriptSegment.id).where(
+        TranscriptSegment.video_id == video_id
+    )
+    await db.execute(
+        delete(SegmentTechnique).where(SegmentTechnique.segment_id.in_(segment_ids))
+    )
+    await db.execute(delete(ScriptBeat).where(ScriptBeat.video_id == video_id))
+    await db.execute(
+        delete(TranscriptSegment).where(TranscriptSegment.video_id == video_id)
+    )
+    await db.flush()
+
+
+async def _generate_embeddings(db: AsyncSession, video_id: uuid.UUID):
+    result = await db.execute(
+        select(TranscriptSegment).where(TranscriptSegment.video_id == video_id)
+    )
+    segments = result.scalars().all()
+
+    texts = [s.text for s in segments]
+    if not texts:
+        return
+
+    batch_size = 20
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i : i + batch_size]
+        batch_segments = segments[i : i + batch_size]
+
+        client = get_openai_client()
+        response = await client.embeddings.create(
+            model="text-embedding-3-small",
+            input=batch_texts,
+        )
+
+        for seg, emb_data in zip(batch_segments, response.data):
+            seg.embedding = emb_data.embedding
+
+    await db.commit()
+
+
+async def _get_or_create_technique(db: AsyncSession, name: str) -> Technique:
+    result = await db.execute(select(Technique).where(Technique.name == name))
+    technique = result.scalar_one_or_none()
+
+    if not technique:
+        technique = Technique(name=name)
+        db.add(technique)
+        await db.flush()
+
+    return technique
+
+
+async def _update_status(
+    db: AsyncSession, video_id: uuid.UUID, status: VideoStatus
+):
+    video = await db.get(Video, video_id)
+    if video:
+        video.status = status
+        await db.commit()
+
+
+async def _set_error(video_id: str):
+    vid = uuid.UUID(video_id)
+    session_factory = make_session_factory()
+    async with session_factory() as db:
+        await _update_status(db, vid, VideoStatus.ERROR)

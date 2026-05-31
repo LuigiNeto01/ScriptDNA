@@ -1,0 +1,39 @@
+{
+  "name": "setup_tutorial",
+  "description": "Segmentos de setup de tutorial tech com tom educativo",
+  "input_segments": [
+    {
+      "start": 0.0,
+      "end": 3.0,
+      "text": "Hoje eu vou te mostrar como configurar o Docker do zero",
+      "word_count": 11
+    },
+    {
+      "start": 3.0,
+      "end": 7.0,
+      "text": "Primeiro você precisa entender o que é um container",
+      "word_count": 9
+    },
+    {
+      "start": 7.0,
+      "end": 12.0,
+      "text": "Um container é basicamente uma caixa isolada onde seu código roda",
+      "word_count": 11
+    },
+    {
+      "start": 12.0,
+      "end": 16.0,
+      "text": "E a grande vantagem é que funciona igual em qualquer máquina",
+      "word_count": 11
+    }
+  ],
+  "expected": {
+    "first_beat": {
+      "beat_type_one_of": ["hook", "setup"],
+      "has_attention_goal": true
+    },
+    "has_setup_beat": true,
+    "total_beats_min": 2,
+    "total_beats_max": 4
+  }
+}
