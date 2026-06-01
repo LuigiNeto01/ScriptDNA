@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import VideoStatus
+from app.models import User, VideoStatus
+from app.core.security import get_current_user
 
 TEST_DATABASE_URL = "postgresql+asyncpg://scriptdna:scriptdna@localhost:5432/scriptdna_test"
 
@@ -47,10 +48,23 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
 
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
+    test_user = User(
+        id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        email="test@example.com",
+        password_hash="test",
+        name="Test User",
+    )
+    await db_session.merge(test_user)
+    await db_session.flush()
+
     async def override_get_db():
         yield db_session
 
+    async def override_get_current_user():
+        return test_user
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

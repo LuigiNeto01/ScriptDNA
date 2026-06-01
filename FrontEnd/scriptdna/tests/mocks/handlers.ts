@@ -81,6 +81,130 @@ export const mockMetrics = {
 };
 
 // ============================================================
+// Phase 8A Mock Data
+// ============================================================
+
+export const mockAiCostSummary = {
+  period_days: 30,
+  total_runs: 42,
+  total_cost_usd: 1.85,
+  total_tokens: 125000,
+  total_prompt_tokens: 80000,
+  total_completion_tokens: 45000,
+  avg_duration_ms: 3200,
+  unknown_cost_runs: 3,
+  error_runs: 2,
+  error_rate: 0.0476,
+  by_agent: [
+    { agent: "ScriptGeneratorAgent", runs: 25, cost_usd: 1.2, tokens: 80000 },
+    { agent: "PerformanceAnalysisAgent", runs: 10, cost_usd: 0.5, tokens: 30000 },
+    { agent: "LearningMemoryAgent", runs: 7, cost_usd: 0.15, tokens: 15000 },
+  ],
+};
+
+export const mockAiRuns = [
+  {
+    id: "run-001",
+    agent_name: "ScriptGeneratorAgent",
+    model: "gpt-4o",
+    status: "success" as const,
+    input_summary: "theme=minecraft variants=2",
+    output_summary: "Generated 2 variants",
+    total_tokens: 3200,
+    prompt_tokens: 2000,
+    completion_tokens: 1200,
+    estimated_cost_usd: 0.017,
+    duration_ms: 4500,
+    error_message: null,
+    created_at: "2026-06-01T14:30:00Z",
+  },
+  {
+    id: "run-002",
+    agent_name: "PerformanceAnalysisAgent",
+    model: "gpt-4o",
+    status: "error" as const,
+    input_summary: "short_id=abc-123",
+    output_summary: null,
+    total_tokens: null,
+    prompt_tokens: null,
+    completion_tokens: null,
+    estimated_cost_usd: null,
+    duration_ms: 30000,
+    error_message: "Timeout ao analisar performance",
+    created_at: "2026-06-01T13:00:00Z",
+  },
+];
+
+export const mockHealthDetailed = {
+  status: "ok" as const,
+  checks: {
+    database: { status: "ok" as const },
+    redis: { status: "ok" as const },
+    celery_broker: { status: "ok" as const },
+    openai_config: { status: "ok" as const },
+    youtube_config: { status: "missing" as const },
+  },
+};
+
+// ============================================================
+// Phase 8B Mock Data
+// ============================================================
+
+export const mockComments = [
+  {
+    id: "c1",
+    youtube_comment_id: "yt-c1",
+    author_name: "TestUser",
+    text: "Muito bom!",
+    like_count: 5,
+    published_at: "2026-06-01T14:00:00Z",
+    sentiment: "positive" as const,
+    sentiment_score: 0.9,
+    intent: "praise" as const,
+    topics: ["humor"],
+    actionable_insight: null,
+    analyzed_at: "2026-06-01T15:00:00Z",
+  },
+];
+
+export const mockCommentSummaryData = {
+  total_comments: 15,
+  analyzed_comments: 12,
+  avg_sentiment_score: 0.65,
+  sentiment_distribution: { positive: 8, negative: 2 },
+  intent_distribution: { praise: 6, question: 3 },
+};
+
+export const mockExperiments = [
+  {
+    id: "exp-1",
+    name: "Hook test",
+    hypothesis: "Questions work better",
+    status: "draft" as const,
+    variant_a_script_id: null,
+    variant_b_script_id: null,
+    variant_a_short_id: null,
+    variant_b_short_id: null,
+    winner: null,
+    result_summary: null,
+    metrics_comparison: null,
+    started_at: null,
+    completed_at: null,
+    created_at: "2026-06-01T10:00:00Z",
+  },
+];
+
+export const mockTrends = [
+  {
+    metric: "views",
+    direction: "up" as const,
+    change_percent: 25.3,
+    recent_value: 5000,
+    baseline_avg: 3990,
+  },
+];
+
+// ============================================================
 // Handlers
 // ============================================================
 
@@ -185,5 +309,83 @@ export const handlers = [
   // Dashboard metrics
   http.get(`${API_URL}/api/dashboard/metrics`, () => {
     return HttpResponse.json({ data: mockMetrics });
+  }),
+
+  // AI Costs (Phase 8A)
+  http.get(`${API_URL}/api/dashboard/ai-costs`, () => {
+    return HttpResponse.json({ data: mockAiCostSummary });
+  }),
+
+  // AI Runs (Phase 8A)
+  http.get(`${API_URL}/api/dashboard/ai-runs`, () => {
+    return HttpResponse.json({ data: mockAiRuns });
+  }),
+
+  // Health check (Phase 8A)
+  http.get(`${API_URL}/health/detailed`, () => {
+    return HttpResponse.json({ data: mockHealthDetailed });
+  }),
+
+  // Comments (Phase 8B)
+  http.get(`${API_URL}/api/comments/short/:shortId`, () => {
+    return HttpResponse.json({ data: mockComments });
+  }),
+
+  http.get(`${API_URL}/api/comments/short/:shortId/summary`, () => {
+    return HttpResponse.json({ data: mockCommentSummaryData });
+  }),
+
+  http.post(`${API_URL}/api/comments/short/:shortId/fetch`, () => {
+    return HttpResponse.json({ data: { task_id: "task-comments-1" } }, { status: 202 });
+  }),
+
+  http.post(`${API_URL}/api/comments/short/:shortId/analyze`, () => {
+    return HttpResponse.json({ data: { task_id: "task-analyze-1" } }, { status: 202 });
+  }),
+
+  // Experiments (Phase 8B)
+  http.get(`${API_URL}/api/experiments`, () => {
+    return HttpResponse.json({ data: mockExperiments });
+  }),
+
+  http.post(`${API_URL}/api/experiments`, () => {
+    return HttpResponse.json({ data: mockExperiments[0] }, { status: 201 });
+  }),
+
+  // Strategy (Phase 8B)
+  http.get(`${API_URL}/api/strategy/trends`, () => {
+    return HttpResponse.json({ data: mockTrends });
+  }),
+
+  http.post(`${API_URL}/api/strategy/weekly`, () => {
+    return HttpResponse.json({ data: { task_id: "task-weekly-1" } }, { status: 202 });
+  }),
+
+  // Titles (Phase 8B)
+  http.post(`${API_URL}/api/generate/titles`, () => {
+    return HttpResponse.json({
+      data: {
+        titles: [
+          { title: "You won't believe this!", strategy: "curiosity_gap", predicted_ctr: "alto" },
+        ],
+      },
+    });
+  }),
+
+  // Thumbnails (Phase 8B)
+  http.post(`${API_URL}/api/generate/thumbnail-ideas`, () => {
+    return HttpResponse.json({
+      data: {
+        ideas: [
+          {
+            concept: "Close-up surprised face",
+            text_overlay: "NO WAY!",
+            emotion: "surprise",
+            color_palette: ["red", "yellow"],
+            composition: "Center subject",
+          },
+        ],
+      },
+    });
   }),
 ];

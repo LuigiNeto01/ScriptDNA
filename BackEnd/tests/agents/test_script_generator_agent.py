@@ -14,7 +14,7 @@ import uuid
 
 import pytest
 
-from app.agents.script_generator_agent import ScriptGeneratorAgent
+from app.agents.script_generator_agent import ScriptGenerationError, ScriptGeneratorAgent
 from app.schemas.generate import ScriptGenerateOutput
 
 
@@ -103,7 +103,7 @@ async def test_generator_with_style_profile(mock_openai_script, db_session, styl
     # Verify prompt included style info
     call_args = mock_openai_script.chat.completions.create.call_args
     user_message = call_args.kwargs["messages"][1]["content"]
-    assert "Perfil de estilo" in user_message, "Briefing deve incluir perfil de estilo"
+    assert "style_profile" in user_message, "Briefing deve incluir perfil de estilo"
 
 
 @pytest.mark.asyncio
@@ -126,7 +126,7 @@ async def test_generator_with_invalid_style_id(mock_openai_script, db_session):
 @pytest.mark.asyncio
 async def test_generator_malformed_json_raises(mock_openai_malformed, db_session):
     agent = ScriptGeneratorAgent()
-    with pytest.raises(json.JSONDecodeError):
+    with pytest.raises(ScriptGenerationError):
         await agent.run(
             theme="teste", duration=30, goal=None,
             platform="youtube", style_profile_id=None, db=db_session,
