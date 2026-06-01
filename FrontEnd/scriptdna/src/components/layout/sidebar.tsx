@@ -15,21 +15,73 @@ import {
   PanelLeftClose,
   PanelLeft,
   Dna,
+  FileText,
+  Video,
+  BarChart3,
+  Lightbulb,
+  Sparkles,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuthStore } from "@/stores/auth-store";
 
-const navItems = [
+const mainNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/import", label: "Importar", icon: Upload },
-  { href: "/library", label: "Biblioteca", icon: Library },
-  { href: "/styles", label: "Estilos", icon: Palette },
-  { href: "/generate", label: "Gerar Roteiro", icon: PenTool },
+  { href: "/scripts", label: "Roteiros", icon: FileText },
+  { href: "/youtube", label: "YouTube", icon: Video },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/ideas", label: "Sugestoes", icon: Sparkles },
 ];
+
+const toolsNavItems = [
+  { href: "/library", label: "Biblioteca", icon: Library },
+  { href: "/import", label: "Importar", icon: Upload },
+  { href: "/generate", label: "Gerador", icon: PenTool },
+  { href: "/styles", label: "Estilos", icon: Palette },
+];
+
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+  sidebarOpen,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  pathname: string;
+  sidebarOpen: boolean;
+}) {
+  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active
+          ? "text-primary-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      )}
+      data-testid={`nav-${href.replace("/", "") || "dashboard"}`}
+      aria-label={label}
+      title={label}
+    >
+      {active && (
+        <span className="absolute inset-0 rounded-lg bg-primary shadow-sm transition-all duration-200" />
+      )}
+      <Icon className="relative h-5 w-5 shrink-0" />
+      {sidebarOpen && <span className="relative hidden sm:inline">{label}</span>}
+    </Link>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const { theme, toggleTheme, sidebarOpen, setSidebarOpen } = useAppStore();
+  const logout = useAuthStore((s) => s.logout);
 
   return (
     <aside
@@ -50,33 +102,21 @@ export function Sidebar() {
       <Separator />
 
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-              data-testid={`nav-${href.replace("/", "") || "dashboard"}`}
-              aria-label={label}
-              title={label}
-            >
-              {active && (
-                <span
-                  className="absolute inset-0 rounded-lg bg-primary shadow-sm transition-all duration-200"
-                />
-              )}
-              <Icon className="relative h-5 w-5 shrink-0" />
-              {sidebarOpen && <span className="relative hidden sm:inline">{label}</span>}
-            </Link>
-          );
-        })}
+        {mainNavItems.map((item) => (
+          <NavItem key={item.href} {...item} pathname={pathname} sidebarOpen={sidebarOpen} />
+        ))}
+
+        <Separator className="my-2" />
+
+        {sidebarOpen && (
+          <span className="hidden px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:inline">
+            Ferramentas
+          </span>
+        )}
+
+        {toolsNavItems.map((item) => (
+          <NavItem key={item.href} {...item} pathname={pathname} sidebarOpen={sidebarOpen} />
+        ))}
       </nav>
 
       <Separator />
@@ -114,6 +154,17 @@ export function Sidebar() {
             <PanelLeft className="h-5 w-5 shrink-0" />
           )}
           {sidebarOpen && <span className="hidden sm:inline">Recolher</span>}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={logout}
+          className="min-h-11 justify-start gap-3 text-muted-foreground hover:text-destructive"
+          aria-label="Sair"
+        >
+          <LogOut className="h-5 w-5 shrink-0" />
+          {sidebarOpen && <span className="hidden sm:inline">Sair</span>}
         </Button>
       </div>
     </aside>

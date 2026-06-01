@@ -238,3 +238,210 @@ export interface VideoDetail extends Video {
   beats?: ScriptBeat[];
   segment_techniques?: SegmentTechnique[];
 }
+
+// === Auth ===
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+  youtube_channel_id: string | null;
+  youtube_channel_name: string | null;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+// === Scripts (Roteiros com Versionamento) ===
+
+export type ScriptStatus = "draft" | "approved" | "published" | "analyzed" | "archived";
+
+export interface Script {
+  id: string;
+  user_id: string;
+  current_version_id: string | null;
+  title: string;
+  theme: string | null;
+  objective: string | null;
+  niche: string | null;
+  speaking_style: string | null;
+  estimated_duration_seconds: number | null;
+  status: ScriptStatus;
+  youtube_video_id: string | null;
+  created_at: string;
+  updated_at: string;
+  current_version?: ScriptVersion;
+}
+
+export interface ScriptVersion {
+  id: string;
+  script_id: string;
+  version_number: number;
+  hook: string | null;
+  narrative_structure: Record<string, unknown>[] | null;
+  cta: string | null;
+  lines: ScriptLine[] | null;
+  analysis: ScriptAnalysis | null;
+  generation_params: Record<string, unknown> | null;
+  change_summary: string | null;
+  created_by: "user" | "ai_generation" | "ai_improvement";
+  created_at: string;
+}
+
+// === YouTube ===
+
+export interface YouTubeChannel {
+  connected: boolean;
+  channel_id?: string;
+  channel_name?: string;
+}
+
+export interface YouTubeShort {
+  id: string;
+  youtube_video_id: string;
+  title: string | null;
+  description: string | null;
+  published_at: string | null;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  tags: string[] | null;
+  transcript: string | null;
+  transcript_source: string | null;
+  script_id: string | null;
+  synced_at: string | null;
+}
+
+export interface ShortMetrics {
+  id: string;
+  youtube_short_id: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  subscribers_gained: number;
+  average_view_duration_seconds: number | null;
+  average_view_percentage: number | null;
+  impressions: number | null;
+  impressions_ctr: number | null;
+  engagement_rate: number | null;
+  retention_score: number | null;
+  source: "manual" | "youtube_api" | "youtube_analytics";
+  collected_at: string | null;
+  published_at: string | null;
+}
+
+export interface MetricsHistoryEntry {
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  collected_at: string | null;
+}
+
+// === Insights ===
+
+export type InsightCategory =
+  | "hook" | "retention" | "cta" | "narrative" | "topic"
+  | "speaking_style" | "timing" | "audience" | "general";
+
+export type InsightSentiment = "positive" | "negative" | "neutral";
+
+export interface ChannelInsight {
+  id: string;
+  category: InsightCategory;
+  sentiment: InsightSentiment;
+  title: string;
+  description: string;
+  evidence: InsightEvidence[] | null;
+  niche: string | null;
+  theme: string | null;
+  speaking_style: string | null;
+  video_type: string | null;
+  confidence: number;
+  times_validated: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InsightEvidence {
+  short_id: string;
+  metric: string;
+  value: number;
+  context?: string;
+}
+
+// === Suggestions ===
+
+export type SuggestionCategory =
+  | "high_view_potential" | "high_retention_potential" | "continuation"
+  | "variation" | "experiment" | "brand_reinforcement";
+
+export type SuggestionStatus = "pending" | "accepted" | "rejected" | "converted_to_script";
+
+export interface VideoSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  justification: string;
+  category: SuggestionCategory;
+  niche: string | null;
+  theme: string | null;
+  estimated_duration_seconds: number | null;
+  suggested_hook: string | null;
+  suggested_structure: string | null;
+  based_on_shorts: unknown[] | null;
+  based_on_insights: unknown[] | null;
+  status: SuggestionStatus;
+  converted_script_id: string | null;
+  confidence_score: number | null;
+  created_at: string;
+}
+
+// === Performance Analysis ===
+
+export interface PerformanceAnalysis {
+  id: string;
+  youtube_short_id: string;
+  script_id: string | null;
+  scores: {
+    hook: number | null;
+    rhythm: number | null;
+    curiosity: number | null;
+    retention: number | null;
+    clarity: number | null;
+    promise_delivery: number | null;
+    cta: number | null;
+    narrative: number | null;
+    overall: number | null;
+  };
+  strengths: AnalysisPoint[] | null;
+  weaknesses: AnalysisPoint[] | null;
+  actionable_learnings: ActionableLearning[] | null;
+  script_correlation: unknown[] | null;
+  created_at: string;
+}
+
+export interface AnalysisPoint {
+  aspect: string;
+  description: string;
+  evidence?: string;
+  suggestion?: string;
+}
+
+export interface ActionableLearning {
+  learning: string;
+  priority: "high" | "medium" | "low";
+  applies_to: string;
+}
+
+// === Paginated Response ===
+
+export interface PaginatedData<T> {
+  items: T[];
+  total: number;
+}

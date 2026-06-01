@@ -2,6 +2,13 @@ import type { ApiResponse, ApiError } from "@/types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+type AuthTokensPayload = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+};
+
 type FastApiValidationError = {
   detail?: Array<{
     loc?: Array<string | number>;
@@ -54,22 +61,38 @@ async function parseErrorResponse(res: Response) {
 
 class ApiClient {
   private baseUrl: string;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
+  private getAuthHeaders(): Record<string, string> {
+    if (typeof window === "undefined") return {};
+    const token = localStorage.getItem("access_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   private async request<T>(
     path: string,
-    options?: RequestInit
+    options?: RequestInit,
+    retryOnUnauthorized = true
   ): Promise<ApiResponse<T>> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       headers: {
         "Content-Type": "application/json",
+        ...this.getAuthHeaders(),
         ...options?.headers,
       },
       ...options,
     });
+
+    if (res.status === 401 && retryOnUnauthorized && !path.startsWith("/api/auth/")) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        return this.request<T>(path, options, false);
+      }
+    }
 
     if (!res.ok) {
       throw await parseErrorResponse(res);
@@ -105,14 +128,66 @@ class ApiClient {
   async upload<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
+      headers: this.getAuthHeaders(),
       body: formData,
     });
+
+    if (res.status === 401) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        const retry = await fetch(`${this.baseUrl}${path}`, {
+          method: "POST",
+          headers: this.getAuthHeaders(),
+          body: formData,
+        });
+
+        if (!retry.ok) {
+          throw await parseErrorResponse(retry);
+        }
+
+        return retry.json();
+      }
+    }
 
     if (!res.ok) {
       throw await parseErrorResponse(res);
     }
 
     return res.json();
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    if (typeof window === "undefined") return false;
+
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (!refreshToken) return false;
+
+    if (!this.refreshPromise) {
+      this.refreshPromise = fetch(`${this.baseUrl}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+        .then(async (res) => {
+          if (!res.ok) return false;
+
+          const payload = (await res.json()) as ApiResponse<AuthTokensPayload>;
+          localStorage.setItem("access_token", payload.data.access_token);
+          localStorage.setItem("refresh_token", payload.data.refresh_token);
+          return true;
+        })
+        .catch(() => false)
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+
+    const refreshed = await this.refreshPromise;
+    if (!refreshed) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+    }
+    return refreshed;
   }
 }
 
