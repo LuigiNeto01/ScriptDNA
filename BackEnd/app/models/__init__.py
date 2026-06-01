@@ -7,10 +7,21 @@ from app.models.style_profile import StyleProfile
 from app.models.style_video import StyleVideo
 from app.models.user import User
 from app.models.script import Script, ScriptStatus, ScriptVersion
-from app.models.youtube import YouTubeShort, ShortMetrics, ShortMetricsHistory
+from app.models.youtube import (
+    YouTubeShort,
+    ShortMetrics,
+    ShortMetricsHistory,
+    ShortRetentionWindow,
+    YouTubeShortSegment,
+    YouTubeShortBeat,
+)
 from app.models.insight import ChannelInsight, InsightCategory, InsightSentiment
 from app.models.suggestion import VideoSuggestion, SuggestionCategory, SuggestionStatus
 from app.models.performance_analysis import PerformanceAnalysis
+from app.models.learning_event import LearningEvent
+from app.models.ai_agent_run import AiAgentRun
+from app.models.youtube_short_comment import YouTubeShortComment
+from app.models.script_experiment import ScriptExperiment
 
 __all__ = [
     "Video",
@@ -29,6 +40,9 @@ __all__ = [
     "YouTubeShort",
     "ShortMetrics",
     "ShortMetricsHistory",
+    "ShortRetentionWindow",
+    "YouTubeShortSegment",
+    "YouTubeShortBeat",
     "ChannelInsight",
     "InsightCategory",
     "InsightSentiment",
@@ -36,4 +50,8 @@ __all__ = [
     "SuggestionCategory",
     "SuggestionStatus",
     "PerformanceAnalysis",
+    "LearningEvent",
+    "AiAgentRun",
+    "YouTubeShortComment",
+    "ScriptExperiment",
 ]

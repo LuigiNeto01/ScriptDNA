@@ -37,6 +37,9 @@ class PerformanceAnalysis(Base):
     weaknesses: Mapped[list | None] = mapped_column(JSON, nullable=True)
     actionable_learnings: Mapped[list | None] = mapped_column(JSON, nullable=True)
     script_correlation: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    script_adherence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    timeline_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    beat_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

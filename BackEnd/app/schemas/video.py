@@ -11,6 +11,7 @@ class VideoTextInput(BaseModel):
     text: str = Field(min_length=10)
     creator_name: str | None = Field(default=None, max_length=200)
     niche: str | None = Field(default=None, max_length=100)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
 
 
 class VideoUrlInput(BaseModel):
@@ -18,6 +19,7 @@ class VideoUrlInput(BaseModel):
     title: str | None = Field(default=None, max_length=500)
     creator_name: str | None = Field(default=None, max_length=200)
     niche: str | None = Field(default=None, max_length=100)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
 
 
 class VideoOut(BaseModel):
@@ -28,6 +30,7 @@ class VideoOut(BaseModel):
     duration_seconds: int | None = None
     creator_name: str | None = None
     niche: str | None = None
+    visibility: str = "private"
     status: VideoStatus
     created_at: datetime
 
@@ -53,6 +56,7 @@ class BatchUrlItem(BaseModel):
     title: str | None = Field(default=None, max_length=500)
     creator_name: str | None = Field(default=None, max_length=200)
     niche: str | None = Field(default=None, max_length=100)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
 
 
 class BatchUrlInput(BaseModel):

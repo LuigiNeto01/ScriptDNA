@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Integer, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,9 @@ class Video(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     title: Mapped[str] = mapped_column(String(500))
     source_type: Mapped[str] = mapped_column(String(50))  # upload | text | url
     source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
@@ -32,6 +35,7 @@ class Video(Base):
     like_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     creator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     niche: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(20), default="private")
     status: Mapped[VideoStatus] = mapped_column(
         Enum(VideoStatus, name="video_status"),
         default=VideoStatus.PENDING,

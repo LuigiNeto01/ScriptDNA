@@ -15,6 +15,8 @@ class StyleVideoOut(BaseModel):
 class StyleProfileOut(BaseModel):
     id: uuid.UUID
     name: str
+    user_id: uuid.UUID | None = None
+    visibility: str = "private"
     description: str | None = None
     tone: str | None = None
     pacing: str | None = None
@@ -34,9 +36,11 @@ class StyleProfileOut(BaseModel):
 class StyleGenerateInput(BaseModel):
     video_ids: list[uuid.UUID] = Field(min_length=1)
     name: str = Field(max_length=300)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
 
 
 class StyleUpdateInput(BaseModel):
     name: str | None = Field(default=None, max_length=300)
+    visibility: str | None = Field(default=None, pattern="^(private|public)$")
     add_video_ids: list[uuid.UUID] = []
     remove_video_ids: list[uuid.UUID] = []

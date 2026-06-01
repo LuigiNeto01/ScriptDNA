@@ -20,6 +20,8 @@ class ScriptGenerateInput(BaseModel):
     aggressiveness: int | None = Field(default=None, ge=1, le=10)
     cta: str | None = Field(default=None, max_length=300)
     platform: str = Field(default="youtube", max_length=50)
+    save: bool = False
+    variants: int = Field(default=1, ge=1, le=5)
 
     _normalize_style_profile_id = field_validator(
         "style_profile_id", mode="before"
@@ -32,17 +34,29 @@ class ScriptLine(BaseModel):
     line: str
     function: str
     retention_note: str | None = None
+    viewer_question: str | None = None
 
 
 class ScriptAnalysis(BaseModel):
     hook_strength: float
     curiosity_gaps: list[str]
     weak_points: list[str]
+    evidence_used: list[str] = []
+    patterns_applied: list[str] = []
+    patterns_avoided: list[str] = []
+    predicted_retention_risks: list[str] = []
+    improvement_suggestions: list[str] = []
 
 
 class ScriptGenerateOutput(BaseModel):
     lines: list[ScriptLine]
     analysis: ScriptAnalysis
+    evidence_used: list[str] = []
+    patterns_applied: list[str] = []
+    patterns_avoided: list[str] = []
+    predicted_retention_risks: list[str] = []
+    improvement_suggestions: list[str] = []
+    quality_evaluation: dict | None = None
 
 
 class ImproveInput(BaseModel):
@@ -71,3 +85,46 @@ class HooksInput(BaseModel):
 
 class HooksOutput(BaseModel):
     hooks: list[str]
+
+
+class TitlesInput(BaseModel):
+    theme: str = Field(min_length=3, max_length=500)
+    script_lines: list[ScriptLine] | None = None
+    niche: str | None = Field(default=None, max_length=100)
+    style_profile_id: uuid.UUID | None = None
+    count: int = Field(default=5, ge=1, le=15)
+    platform: str = Field(default="youtube_shorts", max_length=50)
+
+    _normalize_style_profile_id = field_validator(
+        "style_profile_id", mode="before"
+    )(_empty_string_to_none)
+
+
+class TitleSuggestion(BaseModel):
+    title: str
+    strategy: str  # e.g. "curiosity_gap", "shock_value", "question"
+    predicted_ctr: str | None = None  # e.g. "alto", "medio"
+
+
+class TitlesOutput(BaseModel):
+    titles: list[TitleSuggestion]
+
+
+class ThumbnailInput(BaseModel):
+    theme: str = Field(min_length=3, max_length=500)
+    title: str | None = Field(default=None, max_length=500)
+    script_lines: list[ScriptLine] | None = None
+    niche: str | None = Field(default=None, max_length=100)
+    count: int = Field(default=3, ge=1, le=10)
+
+
+class ThumbnailIdea(BaseModel):
+    concept: str
+    text_overlay: str | None = None
+    emotion: str | None = None
+    color_palette: list[str] = []
+    composition: str | None = None
+
+
+class ThumbnailOutput(BaseModel):
+    ideas: list[ThumbnailIdea]
