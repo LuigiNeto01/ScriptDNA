@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -11,6 +12,10 @@ from app.core.config import settings
 from app.db.session import make_session_factory
 from app.models.user import User
 from app.models.youtube import ShortMetrics, ShortMetricsHistory, YouTubeShort
+from app.models.youtube_short_comment import YouTubeShortComment
+from app.services.youtube_short_processing_service import YouTubeShortProcessingService
+
+logger = logging.getLogger(__name__)
 
 
 def _run_async(coro):
@@ -19,6 +24,10 @@ def _run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+def _backoff_delay(retries: int, base: int = 15) -> int:
+    return base * (3 ** retries)
 
 
 async def _refresh_token_if_needed(user: User, db) -> str:
@@ -61,6 +70,34 @@ def _parse_duration(duration_str: str) -> int:
     minutes = int(match.group(2) or 0)
     seconds = int(match.group(3) or 0)
     return hours * 3600 + minutes * 60 + seconds
+
+
+def _parse_srt_segments(text: str) -> list[dict]:
+    blocks = re.split(r"\n\s*\n", text.strip())
+    segments = []
+    for block in blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if len(lines) < 2:
+            continue
+        timing_line = next((line for line in lines if "-->" in line), None)
+        if not timing_line:
+            continue
+        start_raw, end_raw = [part.strip() for part in timing_line.split("-->", 1)]
+        body = " ".join(line for line in lines if line != timing_line and not line.isdigit())
+        if body:
+            segments.append({
+                "start": _srt_time_to_seconds(start_raw),
+                "end": _srt_time_to_seconds(end_raw),
+                "text": body,
+                "timing_source": "real",
+            })
+    return segments
+
+
+def _srt_time_to_seconds(value: str) -> float:
+    value = value.split()[0].replace(",", ".")
+    hours, minutes, seconds = value.split(":")
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 
 def _is_short(video_details: dict) -> bool:
@@ -160,7 +197,12 @@ def _build_short_metrics(short: YouTubeShort, stats: dict, analytics_data: dict)
 @celery_app.task(name="app.tasks.youtube_tasks.sync_channel_shorts", bind=True, max_retries=3)
 def sync_channel_shorts(self, user_id: str):
     """Sync all Shorts from user's YouTube channel."""
-    return _run_async(_sync_channel_shorts(self, user_id))
+    logger.info("sync_channel_shorts started", extra={"task_id": self.request.id, "user_id": user_id, "step": "start"})
+    try:
+        return _run_async(_sync_channel_shorts(self, user_id))
+    except Exception as exc:
+        logger.error("sync_channel_shorts failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
 async def _sync_channel_shorts(task, user_id: str):
@@ -239,7 +281,10 @@ async def _sync_channel_shorts(task, user_id: str):
                 yt_video_id = video["id"]
 
                 existing = await db.execute(
-                    select(YouTubeShort).where(YouTubeShort.youtube_video_id == yt_video_id)
+                    select(YouTubeShort).where(
+                        YouTubeShort.user_id == uuid.UUID(user_id),
+                        YouTubeShort.youtube_video_id == yt_video_id,
+                    )
                 )
                 short = existing.scalar_one_or_none()
 
@@ -287,7 +332,12 @@ async def _sync_channel_shorts(task, user_id: str):
 @celery_app.task(name="app.tasks.youtube_tasks.fetch_short_metrics", bind=True, max_retries=3)
 def fetch_short_metrics(self, user_id: str, short_id: str):
     """Fetch updated metrics for a specific Short."""
-    return _run_async(_fetch_short_metrics(self, user_id, short_id))
+    logger.info("fetch_short_metrics started", extra={"task_id": self.request.id, "short_id": short_id, "step": "start"})
+    try:
+        return _run_async(_fetch_short_metrics(self, user_id, short_id))
+    except Exception as exc:
+        logger.error("fetch_short_metrics failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
 async def _fetch_short_metrics(task, user_id: str, short_id: str):
@@ -298,7 +348,12 @@ async def _fetch_short_metrics(task, user_id: str, short_id: str):
         if not user:
             return {"error": "User not found"}
 
-        result = await db.execute(select(YouTubeShort).where(YouTubeShort.id == uuid.UUID(short_id)))
+        result = await db.execute(
+            select(YouTubeShort).where(
+                YouTubeShort.id == uuid.UUID(short_id),
+                YouTubeShort.user_id == uuid.UUID(user_id),
+            )
+        )
         short = result.scalar_one_or_none()
         if not short:
             return {"error": "Short not found"}
@@ -352,7 +407,12 @@ async def _fetch_short_metrics(task, user_id: str, short_id: str):
 @celery_app.task(name="app.tasks.youtube_tasks.fetch_short_transcript", bind=True, max_retries=3)
 def fetch_short_transcript(self, user_id: str, short_id: str):
     """Fetch transcript for a Short (captions or Whisper fallback)."""
-    return _run_async(_fetch_short_transcript(self, user_id, short_id))
+    logger.info("fetch_short_transcript started", extra={"task_id": self.request.id, "short_id": short_id, "step": "start"})
+    try:
+        return _run_async(_fetch_short_transcript(self, user_id, short_id))
+    except Exception as exc:
+        logger.error("fetch_short_transcript failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
 async def _fetch_short_transcript(task, user_id: str, short_id: str):
@@ -363,7 +423,12 @@ async def _fetch_short_transcript(task, user_id: str, short_id: str):
         if not user:
             return {"error": "User not found"}
 
-        result = await db.execute(select(YouTubeShort).where(YouTubeShort.id == uuid.UUID(short_id)))
+        result = await db.execute(
+            select(YouTubeShort).where(
+                YouTubeShort.id == uuid.UUID(short_id),
+                YouTubeShort.user_id == uuid.UUID(user_id),
+            )
+        )
         short = result.scalar_one_or_none()
         if not short:
             return {"error": "Short not found"}
@@ -373,6 +438,7 @@ async def _fetch_short_transcript(task, user_id: str, short_id: str):
         # Try YouTube Captions API first
         transcript = None
         source = None
+        timed_segments = None
 
         try:
             async with httpx.AsyncClient() as client:
@@ -405,14 +471,8 @@ async def _fetch_short_transcript(task, user_id: str, short_id: str):
                             headers={"Authorization": f"Bearer {access_token}"},
                         )
                         if cap_response.status_code == 200:
-                            # Parse SRT to plain text
-                            lines = cap_response.text.split("\n")
-                            text_lines = [
-                                line for line in lines
-                                if line.strip() and not line.strip().isdigit()
-                                and "-->" not in line
-                            ]
-                            transcript = " ".join(text_lines)
+                            timed_segments = _parse_srt_segments(cap_response.text)
+                            transcript = " ".join(segment["text"] for segment in timed_segments)
                             source = "youtube_captions"
         except Exception:
             pass
@@ -442,6 +502,16 @@ async def _fetch_short_transcript(task, user_id: str, short_id: str):
                         agent = TranscriptionAgent()
                         segments = await agent.run(file_path)
                         transcript = " ".join(s["text"] for s in segments)
+                        timed_segments = [
+                            {
+                                "start": s["start"],
+                                "end": s["end"],
+                                "text": s["text"],
+                                "timing_source": "real",
+                            }
+                            for s in segments
+                            if s.get("text")
+                        ]
                         source = "whisper"
             except Exception:
                 return {"error": "Could not fetch transcript"}
@@ -449,7 +519,134 @@ async def _fetch_short_transcript(task, user_id: str, short_id: str):
         if transcript:
             short.transcript = transcript
             short.transcript_source = source
+            service = YouTubeShortProcessingService()
+            processing = await service.segment_embed_and_analyze(
+                short,
+                db,
+                timing_source="real" if timed_segments else "estimated",
+                timed_segments=timed_segments,
+            )
             await db.commit()
-            return {"transcript_length": len(transcript), "source": source}
+            return {
+                "transcript_length": len(transcript),
+                "source": source,
+                **processing,
+            }
 
         return {"error": "No transcript available"}
+
+
+@celery_app.task(name="app.tasks.youtube_tasks.fetch_short_comments", bind=True, max_retries=3)
+def fetch_short_comments(self, user_id: str, short_id: str):
+    """Fetch comments for a specific Short from YouTube Data API."""
+    logger.info("fetch_short_comments started", extra={"task_id": self.request.id, "short_id": short_id, "step": "start"})
+    try:
+        return _run_async(_fetch_short_comments(self, user_id, short_id))
+    except Exception as exc:
+        logger.error("fetch_short_comments failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
+
+
+async def _fetch_short_comments(task, user_id: str, short_id: str):
+    session_factory = make_session_factory()
+    async with session_factory() as db:
+        result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+        user = result.scalar_one_or_none()
+        if not user:
+            return {"error": "User not found"}
+
+        result = await db.execute(
+            select(YouTubeShort).where(
+                YouTubeShort.id == uuid.UUID(short_id),
+                YouTubeShort.user_id == uuid.UUID(user_id),
+            )
+        )
+        short = result.scalar_one_or_none()
+        if not short:
+            return {"error": "Short not found"}
+
+        access_token = await _refresh_token_if_needed(user, db)
+
+        # Fetch comment threads via YouTube Data API
+        all_comments = []
+        next_page_token = None
+
+        async with httpx.AsyncClient() as client:
+            while True:
+                params = {
+                    "part": "snippet",
+                    "videoId": short.youtube_video_id,
+                    "maxResults": 100,
+                    "order": "relevance",
+                    "textFormat": "plainText",
+                }
+                if next_page_token:
+                    params["pageToken"] = next_page_token
+
+                response = await client.get(
+                    "https://www.googleapis.com/youtube/v3/commentThreads",
+                    params=params,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+                if response.status_code == 403:
+                    logger.warning(
+                        "Comments disabled or quota exceeded",
+                        extra={"short_id": short_id, "status": response.status_code},
+                    )
+                    return {"error": "Comments disabled or API quota exceeded", "fetched": 0}
+
+                if response.status_code != 200:
+                    return {"error": f"YouTube API error: {response.status_code}", "fetched": 0}
+
+                data = response.json()
+                items = data.get("items", [])
+
+                for item in items:
+                    snippet = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
+                    if not snippet.get("textDisplay"):
+                        continue
+
+                    published_at = None
+                    if snippet.get("publishedAt"):
+                        published_at = datetime.fromisoformat(
+                            snippet["publishedAt"].replace("Z", "+00:00")
+                        )
+
+                    all_comments.append({
+                        "youtube_comment_id": item["snippet"]["topLevelComment"]["id"],
+                        "author_name": snippet.get("authorDisplayName"),
+                        "text": snippet["textDisplay"],
+                        "like_count": _int_metric(snippet.get("likeCount")),
+                        "published_at": published_at,
+                    })
+
+                next_page_token = data.get("nextPageToken")
+                if not next_page_token or len(all_comments) >= 500:
+                    break
+
+        # Upsert comments (skip duplicates by youtube_comment_id)
+        saved = 0
+        for comment_data in all_comments:
+            existing = await db.execute(
+                select(YouTubeShortComment).where(
+                    YouTubeShortComment.youtube_comment_id == comment_data["youtube_comment_id"]
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            comment = YouTubeShortComment(
+                user_id=uuid.UUID(user_id),
+                short_id=short.id,
+                **comment_data,
+            )
+            db.add(comment)
+            saved += 1
+
+        await db.commit()
+        logger.info(
+            "fetch_short_comments completed",
+            extra={"task_id": task.request.id, "short_id": short_id, "fetched": len(all_comments), "saved": saved},
+        )
+        return {"fetched": len(all_comments), "saved": saved, "total_available": len(all_comments)}

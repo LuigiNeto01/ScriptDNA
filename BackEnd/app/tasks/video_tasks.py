@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import tempfile
 import uuid
@@ -22,6 +23,8 @@ from app.models import (
     VideoStatus,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _run_async(coro):
     loop = asyncio.new_event_loop()
@@ -31,31 +34,42 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+def _backoff_delay(retries: int, base: int = 10) -> int:
+    """Exponential backoff: 10s, 30s, 90s."""
+    return base * (3 ** retries)
+
+
+@celery_app.task(bind=True, max_retries=3)
 def process_video_upload(self, video_id: str, file_path: str):
+    logger.info("process_video_upload started", extra={"task_id": self.request.id, "step": "start"})
     try:
         _run_async(_process_upload(self, video_id, file_path))
     except Exception as exc:
+        logger.error("process_video_upload failed", extra={"task_id": self.request.id, "error": str(exc)})
         _run_async(_set_error(video_id))
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+@celery_app.task(bind=True, max_retries=3)
 def process_video_text(self, video_id: str, text: str):
+    logger.info("process_video_text started", extra={"task_id": self.request.id, "step": "start"})
     try:
         _run_async(_process_text(self, video_id, text))
     except Exception as exc:
+        logger.error("process_video_text failed", extra={"task_id": self.request.id, "error": str(exc)})
         _run_async(_set_error(video_id))
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+@celery_app.task(bind=True, max_retries=3)
 def process_video_url(self, video_id: str, url: str):
+    logger.info("process_video_url started", extra={"task_id": self.request.id, "step": "start"})
     try:
         _run_async(_process_url(self, video_id, url))
     except Exception as exc:
+        logger.error("process_video_url failed", extra={"task_id": self.request.id, "error": str(exc)})
         _run_async(_set_error(video_id))
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
 def _report_progress(task, progress: float, current_step: str):

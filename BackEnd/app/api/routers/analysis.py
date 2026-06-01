@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import celery_app
+from app.core.rate_limit import RateLimiter
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.performance_analysis import PerformanceAnalysis
@@ -14,12 +15,16 @@ from app.schemas.common import DataResponse
 
 router = APIRouter()
 
+_analysis_limiter = RateLimiter(per_minute=3, per_day=30, resource="analyze_performance")
+_channel_limiter = RateLimiter(per_minute=2, per_day=10, resource="analyze_channel")
+
 
 @router.post("/performance/{short_id}", response_model=DataResponse, status_code=202)
 async def analyze_performance(
     short_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _rl=Depends(_analysis_limiter),
 ):
     # Verify ownership
     result = await db.execute(
@@ -62,7 +67,10 @@ async def get_performance_analysis(
 
 
 @router.post("/channel", response_model=DataResponse, status_code=202)
-async def analyze_channel(user: User = Depends(get_current_user)):
+async def analyze_channel(
+    user: User = Depends(get_current_user),
+    _rl=Depends(_channel_limiter),
+):
     task = celery_app.send_task(
         "app.tasks.analysis_tasks.analyze_channel",
         args=[str(user.id)],
@@ -71,7 +79,10 @@ async def analyze_channel(user: User = Depends(get_current_user)):
 
 
 @router.post("/patterns", response_model=DataResponse, status_code=202)
-async def identify_patterns(user: User = Depends(get_current_user)):
+async def identify_patterns(
+    user: User = Depends(get_current_user),
+    _rl=Depends(_channel_limiter),
+):
     task = celery_app.send_task(
         "app.tasks.analysis_tasks.generate_insights",
         args=[str(user.id)],
@@ -99,5 +110,8 @@ def _analysis_to_dict(a: PerformanceAnalysis) -> dict:
         "weaknesses": a.weaknesses,
         "actionable_learnings": a.actionable_learnings,
         "script_correlation": a.script_correlation,
+        "script_adherence": a.script_adherence,
+        "timeline_analysis": a.timeline_analysis,
+        "beat_scores": a.beat_scores,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }

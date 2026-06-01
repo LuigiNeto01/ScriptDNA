@@ -79,8 +79,36 @@ Gere insights especificos e aplicaveis a proximos roteiros.
   "script_correlation": [
     {"line_range": "0-3s", "planned": "...", "actual_metric": "...", "verdict": "excelente|bom|fraco"}
   ],
+  "script_adherence": {
+    "script_adherence_score": 0.78,
+    "major_differences": [],
+    "missing_script_parts": [],
+    "new_unscripted_parts": []
+  },
+  "timeline_analysis": {
+    "timeline_score": 0.82,
+    "strong_moments": [],
+    "drop_moments": [],
+    "beat_performance": {}
+  },
+  "beat_scores": {
+    "hook": 0.91,
+    "setup": 0.62,
+    "conflict": 0.78,
+    "escalation": 0.84,
+    "payoff": 0.88,
+    "cta": 0.55
+  },
   "actionable_learnings": [
-    {"learning": "...", "priority": "high|medium|low", "confidence": 0.8, "applies_to": "...", "evidence_count": 3}
+    {
+      "category": "hook|retention|cta|narrative|topic|speaking_style|timing|audience|general",
+      "sentiment": "positive|negative|neutral",
+      "claim": "...",
+      "evidence": [],
+      "confidence_delta": 0.12,
+      "applies_to_niche": "...",
+      "recommended_action": "..."
+    }
   ],
   "insights_validated": [],
   "insights_invalidated": []
@@ -102,6 +130,8 @@ class PerformanceAnalysisAgent:
         transcript: str | None,
         channel_averages: dict,
         existing_insights: list[dict] | None = None,
+        script_adherence: dict | None = None,
+        timeline_analysis: dict | None = None,
     ) -> dict:
         client = get_openai_client()
 
@@ -118,6 +148,12 @@ class PerformanceAnalysisAgent:
 
 ## Transcricao Real
 {transcript or "Nao disponivel"}
+
+## Aderencia entre roteiro planejado e transcricao real
+{json.dumps(script_adherence, indent=2, ensure_ascii=False) if script_adherence else "Nao calculada"}
+
+## Analise temporal, janelas de retencao e performance por beat
+{json.dumps(timeline_analysis, indent=2, ensure_ascii=False) if timeline_analysis else "Nao disponivel"}
 
 ## Insights Existentes do Canal
 {json.dumps(existing_insights, indent=2, ensure_ascii=False) if existing_insights else "Nenhum"}

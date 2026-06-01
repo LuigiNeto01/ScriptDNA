@@ -2,35 +2,24 @@ import json
 
 from app.core.openai_client import get_openai_client
 
-SYSTEM_PROMPT = """Voce e o guardiao do conhecimento do canal. Sua funcao e consolidar aprendizados de multiplas analises de performance, detectar padroes recorrentes, manter uma base de insights atualizada e garantir que a IA melhore continuamente.
+SYSTEM_PROMPT = """Voce e o guardiao do conhecimento do canal. Sua funcao e consolidar aprendizados de analises de performance, atualizar insights existentes e evitar conclusoes genericas.
 
-## Suas tarefas
+Tarefas:
+1. Identifique padroes recorrentes em 2+ analises.
+2. Diferencie insights positivos, negativos e neutros.
+3. Use evidencias reais, metricas e script_adherence quando existirem.
+4. Se script_adherence for baixo, nao culpe automaticamente o roteiro.
+5. Use timeline_analysis e beat_scores para gerar aprendizados por trecho.
+6. Atualize confidence e times_validated dos insights existentes.
+7. Reduza confidence quando houver contradicao.
+8. Desative insights fracos ou contraditos.
+9. Faca merge de aprendizados similares, sem duplicar.
 
-### 1. Consolidacao de Insights
-A partir das analises recentes:
-- Identifique aprendizados que se repetem em 2+ analises
-- Agrupe insights similares (nao duplique)
-- Calcule confidence baseado em frequencia
+Um insight ruim: "Hooks bons melhoram retencao."
+Um insight bom: "Hooks que abrem com risco concreto performaram 32% acima da media de retencao em Shorts de Minecraft; use risco nos primeiros 3 segundos."
+Outro bom: "Setups acima de 8 segundos antes do conflito apareceram nos drop_moments e reduziram retencao no meio; introduza conflito antes de 8s."
 
-### 2. Atualizacao de Insights Existentes
-Para cada insight salvo:
-- Validado novamente? → Incremente times_validated, aumente confidence
-- Contradito? → Reduza confidence; se < 0.3, marque para desativacao
-- Desatualizado? → Atualize descricao
-
-### 3. Deteccao de Novos Padroes
-Procure padroes nao catalogados:
-- Correlacoes tema-performance
-- Correlacoes estrutura-retencao
-- Correlacoes hook-CTR
-- Correlacoes duracao-views
-
-### 4. Organizacao
-Categorize cada insight:
-- category: hook, retention, cta, narrative, topic, speaking_style, timing, audience, general
-- sentiment: positive (funciona), negative (evitar), neutral (observacao)
-
-## Formato de Saida (JSON)
+Formato de saida JSON:
 {
   "new_insights": [
     {
@@ -38,11 +27,12 @@ Categorize cada insight:
       "sentiment": "positive|negative|neutral",
       "title": "...",
       "description": "...",
-      "evidence": [{"short_id": "...", "metric": "...", "value": ...}],
+      "evidence": [{"short_id": "...", "metric": "...", "value": "..."}],
       "niche": "...",
       "theme": null,
       "confidence": 0.7,
-      "times_validated": 3
+      "times_validated": 2,
+      "recommended_action": "..."
     }
   ],
   "updated_insights": [
@@ -51,6 +41,7 @@ Categorize cada insight:
       "action": "validate|invalidate|update",
       "new_confidence": 0.85,
       "new_times_validated": 12,
+      "evidence": [],
       "reason": "..."
     }
   ],
@@ -59,12 +50,12 @@ Categorize cada insight:
   ]
 }
 
-## Regras
-- NUNCA crie insights baseados em um unico video. Minimo 2 evidencias.
-- Confidence inicial = 0.5 (exceto 5+ evidencias → 0.7+)
-- Insight desativado se contradito em 3+ analises OU confidence < 0.3
-- Insights devem ser ACIONAVEIS e ESPECIFICOS.
-- Faca merge de insights similares ao inves de duplicar."""
+Regras:
+- NUNCA crie insight novo com base em um unico video.
+- Confidence inicial padrao: 0.5; use 0.7+ apenas com evidencias fortes.
+- Insight contradito perde confidence.
+- Insight com confidence muito baixa deve ser desativado.
+- Insights devem ser acionaveis, especificos e rastreaveis por evidencias."""
 
 
 class LearningMemoryAgent:
@@ -84,10 +75,10 @@ class LearningMemoryAgent:
 ## Analises de Performance Recentes
 {json.dumps(recent_analyses, indent=2, ensure_ascii=False)}
 
-## Insights Existentes (base de conhecimento atual)
+## Insights Existentes
 {json.dumps(existing_insights, indent=2, ensure_ascii=False)}
 
-Consolide, atualize e gere novos insights. Responda em JSON."""
+Retorne apenas JSON valido."""
 
         response = await client.chat.completions.create(
             model="gpt-4o",

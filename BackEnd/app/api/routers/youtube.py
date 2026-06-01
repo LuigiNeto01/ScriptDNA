@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import celery_app
+from app.core.rate_limit import RateLimiter
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.user import User
@@ -14,6 +15,9 @@ from app.schemas.common import DataResponse
 from app.schemas.youtube import ManualMetricsInput, MetricsUpdateInput
 
 router = APIRouter()
+
+_sync_limiter = RateLimiter(per_minute=1, per_day=10, resource="youtube_sync")
+_transcript_limiter = RateLimiter(per_minute=3, per_day=30, resource="fetch_transcript")
 
 
 @router.get("/channel", response_model=DataResponse)
@@ -29,7 +33,10 @@ async def get_channel(user: User = Depends(get_current_user)):
 
 
 @router.post("/sync", response_model=DataResponse, status_code=status.HTTP_202_ACCEPTED)
-async def sync_shorts(user: User = Depends(get_current_user)):
+async def sync_shorts(
+    user: User = Depends(get_current_user),
+    _rl=Depends(_sync_limiter),
+):
     if not user.youtube_channel_id:
         raise HTTPException(status_code=400, detail="YouTube channel not connected")
 
@@ -98,6 +105,7 @@ async def fetch_transcript(
     short_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _rl=Depends(_transcript_limiter),
 ):
     short = await _get_user_short(short_id, user.id, db)
     task = celery_app.send_task(

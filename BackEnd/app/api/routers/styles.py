@@ -19,11 +19,14 @@ Resposta 202: { data: { task_id: str } }
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models import StyleProfile, StyleVideo
+from app.models.user import User
+from app.models.video import Video
 from app.schemas.common import DataResponse
 from app.schemas.style import StyleGenerateInput, StyleProfileOut, StyleUpdateInput
 from app.tasks.style_tasks import generate_style_profile, regenerate_style_profile
@@ -38,17 +41,26 @@ def _profile_to_out(profile: StyleProfile) -> StyleProfileOut:
 
 
 @router.get("", response_model=DataResponse)
-async def list_styles(db: AsyncSession = Depends(get_db)):
+async def list_styles(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
-        select(StyleProfile).order_by(StyleProfile.created_at.desc())
+        select(StyleProfile)
+        .where(or_(StyleProfile.user_id == user.id, StyleProfile.visibility == "public"))
+        .order_by(StyleProfile.created_at.desc())
     )
     profiles = result.scalars().all()
     return DataResponse(data=[_profile_to_out(p) for p in profiles])
 
 
 @router.get("/{style_id}", response_model=DataResponse)
-async def get_style(style_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    profile = await db.get(StyleProfile, style_id)
+async def get_style(
+    style_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    profile = await _get_accessible_style(style_id, user.id, db)
     if not profile:
         raise HTTPException(
             status_code=404,
@@ -61,9 +73,10 @@ async def get_style(style_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 async def update_style(
     style_id: uuid.UUID,
     body: StyleUpdateInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    profile = await db.get(StyleProfile, style_id)
+    profile = await _get_owned_style(style_id, user.id, db)
     if not profile:
         raise HTTPException(
             status_code=404,
@@ -72,6 +85,8 @@ async def update_style(
 
     if body.name is not None:
         profile.name = body.name
+    if body.visibility is not None:
+        profile.visibility = body.visibility
 
     if body.remove_video_ids:
         await db.execute(
@@ -82,6 +97,7 @@ async def update_style(
         )
 
     if body.add_video_ids:
+        await _validate_owned_videos(body.add_video_ids, user.id, db)
         existing = await db.execute(
             select(StyleVideo.video_id).where(
                 StyleVideo.style_profile_id == style_id
@@ -110,8 +126,12 @@ async def update_style(
 
 
 @router.delete("/{style_id}", status_code=200, response_model=DataResponse)
-async def delete_style(style_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    profile = await db.get(StyleProfile, style_id)
+async def delete_style(
+    style_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    profile = await _get_owned_style(style_id, user.id, db)
     if not profile:
         raise HTTPException(
             status_code=404,
@@ -124,9 +144,66 @@ async def delete_style(style_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/generate", status_code=202, response_model=DataResponse)
-async def generate_style(body: StyleGenerateInput):
+async def generate_style(
+    body: StyleGenerateInput,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _validate_owned_videos(body.video_ids, user.id, db)
     task = generate_style_profile.delay(
         [str(vid) for vid in body.video_ids],
         body.name,
+        str(user.id),
+        body.visibility,
     )
     return DataResponse(data={"task_id": task.id})
+
+
+async def _get_accessible_style(
+    style_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+) -> StyleProfile:
+    result = await db.execute(
+        select(StyleProfile).where(
+            StyleProfile.id == style_id,
+            or_(StyleProfile.user_id == user_id, StyleProfile.visibility == "public"),
+        )
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Perfil de estilo nao encontrado"},
+        )
+    return profile
+
+
+async def _get_owned_style(
+    style_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+) -> StyleProfile:
+    result = await db.execute(
+        select(StyleProfile).where(
+            StyleProfile.id == style_id,
+            StyleProfile.user_id == user_id,
+        )
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Perfil de estilo nao encontrado"},
+        )
+    return profile
+
+
+async def _validate_owned_videos(
+    video_ids: list[uuid.UUID], user_id: uuid.UUID, db: AsyncSession
+) -> None:
+    result = await db.execute(
+        select(Video.id).where(Video.id.in_(video_ids), Video.user_id == user_id)
+    )
+    found = {row[0] for row in result.all()}
+    if found != set(video_ids):
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Um ou mais videos nao pertencem ao usuario"},
+        )

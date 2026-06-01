@@ -1,10 +1,13 @@
 import asyncio
+import logging
 import uuid
 
 from app.core.celery_app import celery_app
 from app.db.session import make_session_factory
 from app.models import StyleProfile, StyleVideo
 from app.agents.style_profiler_agent import StyleProfilerAgent
+
+logger = logging.getLogger(__name__)
 
 
 def _run_async(coro):
@@ -15,25 +18,37 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
-def generate_style_profile(self, video_ids: list[str], name: str):
+def _backoff_delay(retries: int, base: int = 10) -> int:
+    return base * (3 ** retries)
+
+
+@celery_app.task(bind=True, max_retries=3)
+def generate_style_profile(
+    self, video_ids: list[str], name: str, user_id: str | None = None, visibility: str = "private"
+):
+    logger.info("generate_style_profile started", extra={"task_id": self.request.id, "step": "start"})
     try:
-        result = _run_async(_generate_profile(video_ids, name))
+        result = _run_async(_generate_profile(video_ids, name, user_id, visibility))
         return result
     except Exception as exc:
-        raise self.retry(exc=exc)
+        logger.error("generate_style_profile failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+@celery_app.task(bind=True, max_retries=3)
 def regenerate_style_profile(self, style_profile_id: str):
+    logger.info("regenerate_style_profile started", extra={"task_id": self.request.id, "step": "start"})
     try:
         result = _run_async(_regenerate_profile(style_profile_id))
         return result
     except Exception as exc:
-        raise self.retry(exc=exc)
+        logger.error("regenerate_style_profile failed", extra={"task_id": self.request.id, "error": str(exc)})
+        raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
-async def _generate_profile(video_ids_str: list[str], name: str) -> dict:
+async def _generate_profile(
+    video_ids_str: list[str], name: str, user_id: str | None = None, visibility: str = "private"
+) -> dict:
     video_ids = [uuid.UUID(vid) for vid in video_ids_str]
 
     session_factory = make_session_factory()
@@ -42,6 +57,7 @@ async def _generate_profile(video_ids_str: list[str], name: str) -> dict:
         profile_data = await agent.run(video_ids, name, db)
 
         profile = StyleProfile(
+            user_id=uuid.UUID(user_id) if user_id else None,
             name=profile_data["name"],
             description=profile_data.get("description"),
             tone=profile_data.get("tone"),
@@ -52,6 +68,7 @@ async def _generate_profile(video_ids_str: list[str], name: str) -> dict:
             narrative_patterns=profile_data.get("narrative_patterns"),
             do_rules=profile_data.get("do_rules"),
             avoid_rules=profile_data.get("avoid_rules"),
+            visibility=visibility,
         )
         db.add(profile)
         await db.flush()

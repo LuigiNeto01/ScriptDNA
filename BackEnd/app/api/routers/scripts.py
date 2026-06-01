@@ -9,6 +9,7 @@ from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.script import Script, ScriptStatus, ScriptVersion
 from app.models.user import User
+from app.models.youtube import YouTubeShort
 from app.schemas.common import DataResponse
 from app.schemas.script import (
     ScriptCreateInput,
@@ -126,6 +127,9 @@ async def update_script(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(script, field, value)
 
+    if "youtube_video_id" in body.model_dump(exclude_unset=True):
+        await _sync_script_short_link(script, body.youtube_video_id, user.id, db)
+
     await db.flush()
     return DataResponse(data=_script_to_dict(script))
 
@@ -162,7 +166,9 @@ async def link_video(
     db: AsyncSession = Depends(get_db),
 ):
     script = await _get_user_script(script_id, user.id, db)
+
     script.youtube_video_id = body.youtube_video_id
+    await _sync_script_short_link(script, body.youtube_video_id, user.id, db)
     if script.status == ScriptStatus.APPROVED:
         script.status = ScriptStatus.PUBLISHED
     await db.flush()
@@ -282,6 +288,38 @@ async def _get_user_script(script_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSe
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
     return script
+
+
+async def _sync_script_short_link(
+    script: Script,
+    youtube_video_id: str | None,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    old_link_result = await db.execute(
+        select(YouTubeShort).where(
+            YouTubeShort.user_id == user_id,
+            YouTubeShort.script_id == script.id,
+        )
+    )
+    for old_short in old_link_result.scalars().all():
+        if old_short.youtube_video_id != youtube_video_id:
+            old_short.script_id = None
+
+    if not youtube_video_id:
+        return
+
+    short_result = await db.execute(
+        select(YouTubeShort).where(
+            YouTubeShort.user_id == user_id,
+            YouTubeShort.youtube_video_id == youtube_video_id,
+        )
+    )
+    short = short_result.scalar_one_or_none()
+    if not short:
+        raise HTTPException(status_code=404, detail="YouTube Short not found")
+
+    short.script_id = script.id
 
 
 def _script_to_dict(script: Script) -> dict:

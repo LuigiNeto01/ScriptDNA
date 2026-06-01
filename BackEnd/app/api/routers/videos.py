@@ -40,11 +40,12 @@ import tempfile
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models import (
     ScriptBeat,
@@ -53,6 +54,7 @@ from app.models import (
     Video,
     VideoStatus,
 )
+from app.models.user import User
 from app.schemas.beat import BeatOut
 from app.schemas.common import DataResponse, ErrorResponse
 from app.schemas.segment import SegmentOut, SegmentTechniqueOut, TechniqueOut
@@ -87,6 +89,8 @@ async def upload_video(
     title: str = Form(...),
     creator_name: str | None = Form(default=None),
     niche: str | None = Form(default=None),
+    visibility: str = Form(default="private"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if file.size and file.size > settings.max_upload_size_bytes:
@@ -97,9 +101,11 @@ async def upload_video(
 
     video = Video(
         title=title,
+        user_id=user.id,
         source_type="file",
         creator_name=creator_name,
         niche=niche,
+        visibility=visibility if visibility in {"private", "public"} else "private",
         status=VideoStatus.PENDING,
     )
     db.add(video)
@@ -121,13 +127,16 @@ async def upload_video(
 @router.post("/text", status_code=202, response_model=DataResponse)
 async def create_video_from_text(
     body: VideoTextInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     video = Video(
         title=body.title,
+        user_id=user.id,
         source_type="text",
         creator_name=body.creator_name,
         niche=body.niche,
+        visibility=body.visibility,
         status=VideoStatus.PENDING,
     )
     db.add(video)
@@ -143,15 +152,18 @@ async def create_video_from_text(
 @router.post("/url", status_code=202, response_model=DataResponse)
 async def create_video_from_url(
     body: VideoUrlInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     url = str(body.url)
     video = Video(
         title=body.title or _title_from_url(url),
+        user_id=user.id,
         source_type="url",
         source_url=url,
         creator_name=body.creator_name,
         niche=body.niche,
+        visibility=body.visibility,
         status=VideoStatus.PENDING,
     )
     db.add(video)
@@ -167,6 +179,7 @@ async def create_video_from_url(
 @router.post("/batch-url", status_code=202, response_model=DataResponse)
 async def create_videos_from_urls(
     body: BatchUrlInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     results = []
@@ -174,10 +187,12 @@ async def create_videos_from_urls(
         url = str(item.url)
         video = Video(
             title=item.title or _title_from_url(url),
+            user_id=user.id,
             source_type="url",
             source_url=url,
             creator_name=item.creator_name or body.creator_name,
             niche=item.niche or body.niche,
+            visibility=item.visibility,
             status=VideoStatus.PENDING,
         )
         db.add(video)
@@ -198,9 +213,14 @@ async def list_videos(
     status: VideoStatus | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    include_public: bool = Query(default=True),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Video).order_by(Video.created_at.desc())
+    access_filter = Video.user_id == user.id
+    if include_public:
+        access_filter = or_(access_filter, Video.visibility == "public")
+    stmt = select(Video).where(access_filter).order_by(Video.created_at.desc())
 
     if niche:
         stmt = stmt.where(Video.niche == niche)
@@ -217,8 +237,12 @@ async def list_videos(
 
 
 @router.get("/{video_id}", response_model=DataResponse)
-async def get_video(video_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    video = await db.get(Video, video_id)
+async def get_video(
+    video_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await _get_accessible_video(video_id, user.id, db)
     if not video:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Vídeo não encontrado"})
 
@@ -226,8 +250,12 @@ async def get_video(video_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{video_id}/beats", response_model=DataResponse)
-async def get_video_beats(video_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    video = await db.get(Video, video_id)
+async def get_video_beats(
+    video_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await _get_accessible_video(video_id, user.id, db)
     if not video:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Vídeo não encontrado"})
 
@@ -240,8 +268,12 @@ async def get_video_beats(video_id: uuid.UUID, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{video_id}/segments", response_model=DataResponse)
-async def get_video_segments(video_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    video = await db.get(Video, video_id)
+async def get_video_segments(
+    video_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await _get_accessible_video(video_id, user.id, db)
     if not video:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Vídeo não encontrado"})
 
@@ -284,12 +316,36 @@ async def get_video_segments(video_id: uuid.UUID, db: AsyncSession = Depends(get
 
 
 @router.delete("/{video_id}", status_code=200, response_model=DataResponse)
-async def delete_video(video_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_video(
+    video_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     video = await db.get(Video, video_id)
     if not video:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Vídeo não encontrado"})
+
+    if video.user_id != user.id:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Sem permissao para excluir este video"})
 
     await db.delete(video)
     await db.commit()
 
     return DataResponse(data={"deleted": True, "video_id": str(video_id)})
+
+
+async def _get_accessible_video(
+    video_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+) -> Video:
+    result = await db.execute(
+        select(Video).where(
+            Video.id == video_id,
+            or_(Video.user_id == user_id, Video.visibility == "public"),
+        )
+    )
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "VÃ­deo nÃ£o encontrado"})
+    return video
