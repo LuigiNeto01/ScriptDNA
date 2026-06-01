@@ -16,6 +16,14 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
 
+    # Auth
+    SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
+
+    # YouTube OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/youtube/callback"
+
     MAX_UPLOAD_SIZE_MB: int = 25
 
     @property

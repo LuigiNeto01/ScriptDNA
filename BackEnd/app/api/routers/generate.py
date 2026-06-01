@@ -117,3 +117,41 @@ async def generate_hooks(
 
     data = json.loads(response.choices[0].message.content)
     return DataResponse(data=HooksOutput(hooks=data["hooks"]))
+
+
+@router.post("/from-suggestion/{suggestion_id}", response_model=DataResponse)
+async def generate_from_suggestion(
+    suggestion_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a full script from a video suggestion."""
+    import uuid
+
+    from fastapi import HTTPException
+    from sqlalchemy import select as sa_select
+
+    from app.models.suggestion import VideoSuggestion
+
+    result = await db.execute(
+        sa_select(VideoSuggestion).where(VideoSuggestion.id == uuid.UUID(suggestion_id))
+    )
+    suggestion = result.scalar_one_or_none()
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    agent = ScriptGeneratorAgent()
+    result = await agent.run(
+        theme=suggestion.theme or suggestion.title,
+        idea=suggestion.description,
+        duration=suggestion.estimated_duration_seconds or 45,
+        niche=suggestion.niche,
+        goal="views",
+        hook_type=None,
+        aggressiveness=7,
+        cta=None,
+        platform="youtube_shorts",
+        style_profile_id=None,
+        db=db,
+    )
+
+    return DataResponse(data=ScriptGenerateOutput(**result))

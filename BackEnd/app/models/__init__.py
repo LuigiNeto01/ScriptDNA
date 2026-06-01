@@ -5,6 +5,12 @@ from app.models.technique import Technique
 from app.models.segment_technique import SegmentTechnique
 from app.models.style_profile import StyleProfile
 from app.models.style_video import StyleVideo
+from app.models.user import User
+from app.models.script import Script, ScriptStatus, ScriptVersion
+from app.models.youtube import YouTubeShort, ShortMetrics, ShortMetricsHistory
+from app.models.insight import ChannelInsight, InsightCategory, InsightSentiment
+from app.models.suggestion import VideoSuggestion, SuggestionCategory, SuggestionStatus
+from app.models.performance_analysis import PerformanceAnalysis
 
 __all__ = [
     "Video",
@@ -16,4 +22,18 @@ __all__ = [
     "SegmentTechnique",
     "StyleProfile",
     "StyleVideo",
+    "User",
+    "Script",
+    "ScriptStatus",
+    "ScriptVersion",
+    "YouTubeShort",
+    "ShortMetrics",
+    "ShortMetricsHistory",
+    "ChannelInsight",
+    "InsightCategory",
+    "InsightSentiment",
+    "VideoSuggestion",
+    "SuggestionCategory",
+    "SuggestionStatus",
+    "PerformanceAnalysis",
 ]

@@ -97,6 +97,11 @@ class ScriptGeneratorAgent:
         if cta:
             briefing_parts.append(f"CTA desejado: {cta}")
 
+        # Channel insights relevant to this topic
+        insights_context = await self._build_insights_context(niche, theme, db)
+        if insights_context:
+            briefing_parts.append(insights_context)
+
         # RAG: buscar vídeos do nicho para extrair estilo de fala
         style_context = await self._build_niche_style(theme, niche, db)
         if style_context:
@@ -254,6 +259,41 @@ class ScriptGeneratorAgent:
 
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    async def _build_insights_context(
+        self, niche: str | None, theme: str | None, db: AsyncSession
+    ) -> str | None:
+        """Fetch active channel insights relevant to the niche/theme."""
+        from app.models.insight import ChannelInsight
+
+        stmt = (
+            select(ChannelInsight)
+            .where(ChannelInsight.is_active == True)  # noqa: E712
+        )
+        if niche:
+            stmt = stmt.where(
+                (ChannelInsight.niche == niche) | (ChannelInsight.niche.is_(None))
+            )
+        stmt = stmt.order_by(ChannelInsight.confidence.desc()).limit(10)
+
+        result = await db.execute(stmt)
+        insights = result.scalars().all()
+
+        if not insights:
+            return None
+
+        parts = ["\n## APRENDIZADOS DO CANAL (insights validados por dados reais)"]
+        parts.append("Use estes insights para informar suas decisoes criativas:\n")
+
+        for i in insights:
+            sentiment_emoji = "✅" if i.sentiment.value == "positive" else "❌" if i.sentiment.value == "negative" else "ℹ️"
+            parts.append(
+                f"  {sentiment_emoji} [{i.category.value}] {i.title} "
+                f"(confianca: {i.confidence:.0%}, validado {i.times_validated}x)"
+            )
+            parts.append(f"     {i.description}")
+
+        return "\n".join(parts)
 
     async def _fallback_semantic(self, theme: str, db: AsyncSession) -> str | None:
         """Quando não há vídeos no nicho, busca por similaridade pura."""

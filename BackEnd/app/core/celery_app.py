@@ -11,6 +11,8 @@ celery_app = Celery(
     include=[
         "app.tasks.video_tasks",
         "app.tasks.style_tasks",
+        "app.tasks.youtube_tasks",
+        "app.tasks.analysis_tasks",
     ],
 )
 
