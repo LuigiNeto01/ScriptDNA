@@ -1,0 +1,404 @@
+Você é um auditor técnico sênior de backend, IA aplicada, RAG, análise de dados e geração de roteiros para Shorts.
+
+Quero que você analise TODO o repositório atual e gere um arquivo Markdown completo com o diagnóstico do fluxo de IA do projeto.
+
+NÃO altere código neste momento.
+NÃO implemente nada.
+Seu trabalho é investigar, mapear, encontrar gaps e me entregar um relatório técnico extremamente útil para outro agente/ChatGPT conseguir entender o projeto e propor melhorias.
+
+# Objetivo da análise
+
+O sistema tem como objetivo gerar roteiros melhores usando todos os dados disponíveis do canal, vídeos, transcrições, métricas, histórico, insights e estilo.
+
+A ideia esperada é um ciclo fechado:
+
+1. importar/subir vídeos ou Shorts;
+2. transcrever;
+3. analisar beats narrativos;
+4. salvar dados estruturados;
+5. importar métricas de performance;
+6. analisar performance;
+7. gerar aprendizados/insights;
+8. usar esses aprendizados na próxima geração de roteiro;
+9. melhorar continuamente a geração.
+
+Quero que você descubra se esse fluxo está realmente funcionando no código e quais dados estão sendo ignorados, mal usados ou poderiam melhorar a performance dos roteiros.
+
+# O que você deve investigar
+
+Analise obrigatoriamente:
+
+- agentes de IA;
+- prompts dos agentes;
+- endpoints;
+- services;
+- models/schemas;
+- tabelas e migrations;
+- tasks Celery;
+- integração com YouTube/OAuth;
+- coleta de métricas;
+- transcrição;
+- geração de embeddings;
+- uso do pgvector;
+- geração de roteiros;
+- melhoria de roteiros;
+- análise de performance;
+- memória/aprendizado;
+- sugestões de vídeos;
+- qualquer lógica de ranking, score, busca, filtro ou fallback.
+
+# Perguntas que o relatório precisa responder
+
+## 1. Fluxo real do sistema
+
+Mapeie o fluxo real do backend, baseado no código.
+
+Quero saber:
+
+- quais endpoints existem;
+- quais agentes cada endpoint chama;
+- quais dados entram;
+- quais dados são buscados no banco;
+- quais dados são enviados para a IA;
+- quais dados são salvos;
+- quais processos são síncronos;
+- quais processos são assíncronos;
+- onde Celery/Redis entram;
+- onde pgvector entra;
+- onde YouTube entra;
+- onde os insights entram;
+- onde os roteiros são versionados.
+
+Inclua diagramas em Mermaid quando fizer sentido.
+
+Exemplo desejado:
+
+```mermaid
+flowchart TD
+    A[POST /api/generate/script] --> B[ScriptGeneratorAgent]
+    B --> C[Busca vídeos do nicho]
+    B --> D[Busca insights ativos]
+    B --> E[Busca segmentos similares via pgvector]
+    B --> F[Prompt GPT]
+    F --> G[Script JSON]
+2. Dados disponíveis no projeto
+
+Crie um inventário de dados.
+
+Liste todas as entidades/tabelas/modelos importantes e explique:
+
+nome da tabela/model;
+campos relevantes;
+para que serve;
+onde é preenchido;
+onde é usado;
+se é usado na geração de roteiro;
+se deveria ser usado e não está sendo.
+
+Formato sugerido:
+
+Dado/Tabela	Campos importantes	Onde nasce	Onde é usado	Entra no roteiro?	Gap
+3. Dados importantes que NÃO estão sendo usados
+
+Procure dados que existem no banco, schemas, models ou services, mas que não entram no prompt ou na lógica de geração.
+
+Exemplos do tipo de coisa que quero encontrar:
+
+métricas do YouTube coletadas mas não usadas na geração;
+retenção média salva mas ignorada;
+CTR salvo mas não usado;
+comentários, likes, shares ou inscritos ganhos ignorados;
+transcript_segments salvos mas não recuperados;
+script_beats salvos mas pouco usados;
+segment_techniques salvas mas não entram na geração;
+insights existem mas são genéricos ou pouco aplicados;
+style_profiles existem mas não são usados corretamente;
+embeddings salvos mas busca semântica é fraca;
+histórico de versões de roteiro não usado para aprendizado;
+performance_analyses criadas mas não retroalimentam a geração.
+
+Para cada gap, explique:
+
+qual dado existe;
+onde ele está no código;
+por que ele é importante;
+por que ele não está sendo usado ou está sendo subutilizado;
+como ele poderia melhorar a geração do roteiro;
+onde ele deveria ser encaixado no fluxo.
+4. Dados usados de forma fraca ou errada
+
+Identifique dados que até são usados, mas de forma ruim.
+
+Exemplos:
+
+usa só top 10 por views, mas ignora retenção;
+usa views como principal métrica, mas views isoladas podem enganar;
+não normaliza por média do canal;
+não considera idade do vídeo;
+não separa vídeos virais de vídeos com alta retenção;
+não diferencia hook verbal de hook visual;
+usa transcript completa demais e estoura contexto;
+usa pouca evidência real nos insights;
+usa fallback sem critério;
+prompt manda replicar estilo, mas não passa exemplos bons o suficiente;
+não ranqueia segmentos por impacto real;
+não usa métricas por janela do vídeo, como 0-3s, 3-10s, finalização etc.
+
+Para cada ponto, traga:
+
+problema;
+evidência no código;
+impacto;
+sugestão de melhoria.
+5. Gaps na geração de roteiro
+
+Avalie especificamente o ScriptGeneratorAgent ou equivalente.
+
+Quero entender:
+
+quais dados entram no prompt;
+quais dados deveriam entrar e não entram;
+como ele escolhe vídeos de referência;
+se ele considera performance real ou só views;
+se ele considera métricas médias do canal;
+se ele usa insights ativos;
+se ele usa style_profile;
+se usa beats narrativos;
+se usa técnicas de retenção;
+se usa transcrições com timestamps;
+se usa dados de performance por trecho;
+se usa aprendizados anteriores;
+se existe risco de copiar demais o estilo/transcrição;
+se existe risco de prompt genérico;
+se a saída JSON é validada corretamente;
+se há fallback quando o JSON vem inválido;
+se há retry;
+se há observabilidade/logs suficientes.
+
+No final dessa seção, traga uma proposta de prompt/contexto ideal para geração de roteiro usando os dados disponíveis.
+
+6. Gaps no ciclo de aprendizado
+
+Analise se o sistema realmente aprende com vídeos anteriores.
+
+Responda:
+
+o LearningMemoryAgent é chamado automaticamente ou manualmente?
+os insights gerados são realmente usados no próximo roteiro?
+insights têm evidência suficiente?
+insights são validados/invalidados com novas métricas?
+existe decaimento temporal?
+existe confiança por nicho?
+existe separação entre insight do canal inteiro e insight de um nicho específico?
+existe diferença entre insight positivo e negativo?
+vídeos ruins também são usados para evitar padrões ruins?
+o sistema sabe quais roteiros foram gerados pela IA e quais foram manuais?
+o sistema compara roteiro planejado vs transcrição real?
+existe ligação clara entre script_id, short_id, metrics e analysis?
+
+Aponte qualquer quebra no ciclo:
+
+gera roteiro -> publica -> mede -> analisa -> aprende -> usa no próximo roteiro
+7. Gaps na análise de performance
+
+Analise o PerformanceAnalysisAgent ou equivalente.
+
+Quero saber se ele consegue realmente dizer por que um Short performou bem ou mal.
+
+Verifique:
+
+quais métricas ele recebe;
+se compara com média do canal;
+se usa retenção;
+se usa CTR;
+se usa engajamento;
+se usa inscritos ganhos;
+se cruza métricas com linhas do roteiro;
+se cruza métricas com timestamps da transcrição;
+se detecta queda em momentos específicos;
+se gera aprendizados acionáveis;
+se salva esses aprendizados;
+se esses aprendizados voltam para o roteiro.
+
+Aponte falhas e melhorias.
+
+8. Gaps na busca semântica / RAG
+
+Analise o uso de embeddings e pgvector.
+
+Quero saber:
+
+onde embeddings são criados;
+quais textos são embedados;
+se os embeddings são por vídeo, segmento, insight ou roteiro;
+qual modelo de embedding é usado;
+qual dimensão;
+qual distância;
+como a busca é feita;
+se há filtros por nicho, usuário, canal, idioma, duração, performance;
+se a busca retorna trechos realmente úteis para roteiro;
+se há reranking;
+se há risco de trazer trechos ruins;
+se há deduplicação;
+se há limite de contexto;
+se os resultados são explicados no prompt.
+
+Sugira uma estratégia melhor de RAG para geração de roteiro.
+
+9. Gaps de arquitetura e possíveis bugs
+
+Procure erros reais ou prováveis:
+
+endpoints quebrados;
+imports errados;
+models inconsistentes;
+migrations incompatíveis;
+campos usados com nomes diferentes;
+tabelas sem relacionamento necessário;
+falta de índices;
+uso incorreto de async/sync;
+tasks que não atualizam status;
+exceções engolidas;
+falta de tratamento de erro da OpenAI;
+falta de validação de JSON;
+campos opcionais tratados como obrigatórios;
+problemas de multiusuário;
+risco de vazar dados entre canais/usuários;
+problemas com OAuth;
+refresh token;
+rate limit;
+duplicidade de vídeos importados;
+falta de idempotência;
+problemas de timezone;
+problemas com vídeos sem métrica;
+problemas com Shorts recém-publicados sem dados suficientes.
+
+Para cada erro/gap, informe:
+
+arquivo;
+função/classe;
+trecho relevante ou descrição;
+severidade: baixa, média, alta, crítica;
+impacto;
+sugestão.
+10. Melhorias para usar TODOS os dados na geração
+
+Proponha uma arquitetura melhor para geração de roteiro considerando todos os dados disponíveis.
+
+Quero sugestões práticas, como:
+
+ranking de vídeos de referência por score composto;
+separar referências em:
+vídeos com alta view;
+vídeos com alta retenção;
+vídeos com alto ganho de inscritos;
+vídeos ruins para evitar padrões;
+usar métricas normalizadas pela média do canal;
+usar decay temporal;
+usar perfil de estilo consolidado;
+usar exemplos positivos e negativos;
+usar insights com confiança;
+usar segmentos de alto impacto;
+usar beats mais frequentes nos vídeos vencedores;
+usar estrutura de roteiro vencedora;
+usar dados de CTA para objetivo específico;
+usar avaliação automática do roteiro antes de retornar;
+gerar múltiplas versões e ranquear;
+criar score de “probabilidade de retenção”;
+criar memória por nicho;
+usar histórico de versões do mesmo roteiro.
+
+Explique como cada melhoria entraria no fluxo.
+
+Formato obrigatório da resposta
+
+Gere um arquivo Markdown chamado:
+
+AI_PIPELINE_AUDIT_FOR_CHATGPT.md
+
+O conteúdo precisa seguir esta estrutura:
+
+# AI Pipeline Audit for ChatGPT
+
+## 1. Executive Summary
+
+Resumo curto do estado atual do sistema.
+
+## 2. Current Real Flow
+
+Mapa real do fluxo com endpoints, agentes e dados.
+
+## 3. Data Inventory
+
+Tabela com todos os dados importantes existentes.
+
+## 4. Data Actually Used in Script Generation
+
+Liste exatamente o que entra hoje na geração de roteiro.
+
+## 5. Important Data Not Used
+
+Liste dados disponíveis que não são usados.
+
+## 6. Weakly Used or Misused Data
+
+Liste dados usados de forma fraca, errada ou incompleta.
+
+## 7. Script Generation Gaps
+
+Análise específica da geração de roteiro.
+
+## 8. Learning Loop Gaps
+
+Análise do ciclo de aprendizado.
+
+## 9. Performance Analysis Gaps
+
+Análise da parte de performance.
+
+## 10. RAG / Embedding / pgvector Gaps
+
+Análise da busca semântica.
+
+## 11. Bugs, Risks and Architecture Problems
+
+Lista de erros, riscos e problemas técnicos.
+
+## 12. Recommended Better Flow
+
+Proposta de fluxo ideal.
+
+## 13. Recommended Data Usage Strategy
+
+Como usar todos os dados disponíveis para melhorar roteiros.
+
+## 14. Recommended Prompt Context for Script Generation
+
+Sugira a estrutura ideal de contexto/prompt para o gerador de roteiro.
+
+## 15. Prioritized Action Plan
+
+Tabela com prioridade:
+
+| Prioridade | Ação | Impacto | Esforço | Arquivos prováveis |
+|---|---|---|---|---|
+
+## 16. Questions for the Project Owner
+
+Liste perguntas importantes que ainda precisam ser respondidas.
+Regras importantes
+Não chute.
+Tudo que você afirmar precisa ser baseado no código.
+Sempre cite arquivos, funções, classes, endpoints ou models.
+Se algo não existir, diga claramente que não encontrou.
+Se algo estiver parcialmente implementado, diga o que existe e o que falta.
+Diferencie:
+dado existente;
+dado salvo;
+dado usado;
+dado usado no prompt;
+dado usado na decisão;
+dado usado no aprendizado.
+Foque principalmente em melhorar a performance dos roteiros usando dados reais.
+Pense como alguém que quer transformar esse backend em um sistema realmente inteligente de geração de Shorts.
+Ao final, salve o relatório em AI_PIPELINE_AUDIT_FOR_CHATGPT.md e também imprima o conteúdo final no terminal/resposta.
