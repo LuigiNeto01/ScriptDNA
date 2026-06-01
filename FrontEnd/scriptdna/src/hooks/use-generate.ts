@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   GenerateScriptRequest,
-  GeneratedScript,
+  GenerateScriptResponse,
   ImprovedScript,
   ImproveScriptRequest,
   GenerateHooksRequest,
@@ -11,7 +11,7 @@ import type {
 export function useGenerateScript() {
   return useMutation({
     mutationFn: (data: GenerateScriptRequest) =>
-      api.post<GeneratedScript>("/api/generate/script", data),
+      api.post<GenerateScriptResponse>("/api/generate/script", data),
   });
 }
 

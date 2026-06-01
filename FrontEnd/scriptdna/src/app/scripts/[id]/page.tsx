@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, ArrowLeft, GitBranch, Clock, Check, Pencil, Sparkles } from "lucide-react";
 import type { ScriptLine, ScriptStatus, ScriptVersion } from "@/types/api";
 import { useImproveScript } from "@/hooks/use-generate";
+import { WhyThisScript } from "@/components/ai/why-this-script";
 
 const STATUS_OPTIONS: { value: ScriptStatus; label: string }[] = [
   { value: "draft", label: "Rascunho" },
@@ -36,6 +37,10 @@ export default function ScriptDetailPage() {
 
   const currentVersion = selectedVersion ?? script.data?.current_version;
   const lines = currentVersion?.lines as ScriptLine[] | null | undefined;
+  const generationParams = currentVersion?.generation_params as
+    | { context_snapshot?: unknown }
+    | null
+    | undefined;
 
   function handleImprove() {
     if (!lines) return;
@@ -125,7 +130,7 @@ export default function ScriptDetailPage() {
               <div className="flex items-center justify-between">
                 <CardTitle>
                   Versao {currentVersion?.version_number ?? 1}
-                  {currentVersion?.created_by === "ai_generation" && <Badge variant="outline" className="ml-2">IA</Badge>}
+                  {(currentVersion?.created_by === "ai_generation" || currentVersion?.created_by === "ai") && <Badge variant="outline" className="ml-2">IA</Badge>}
                   {currentVersion?.created_by === "ai_improvement" && <Badge variant="outline" className="ml-2">Melhoria IA</Badge>}
                 </CardTitle>
                 <div className="flex gap-2">
@@ -172,7 +177,7 @@ export default function ScriptDetailPage() {
               )}
 
               {/* Analysis */}
-              {currentVersion?.analysis && (
+              {currentVersion?.analysis ? (
                 <div className="mt-4 rounded-lg border p-4 space-y-2">
                   <h4 className="font-semibold text-sm">Analise</h4>
                   <div className="grid grid-cols-3 gap-2 text-sm">
@@ -181,7 +186,16 @@ export default function ScriptDetailPage() {
                     <div>Fracos: <strong>{(currentVersion.analysis.weak_points as string[])?.length ?? 0}</strong></div>
                   </div>
                 </div>
-              )}
+              ) : null}
+
+              {generationParams?.context_snapshot ? (
+                <div className="mt-4">
+                  <WhyThisScript
+                    snapshot={generationParams.context_snapshot}
+                    analysis={currentVersion?.analysis}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

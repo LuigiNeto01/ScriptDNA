@@ -14,6 +14,8 @@ import {
 } from "@/hooks/use-youtube";
 import { usePerformanceAnalysis, useAnalyzePerformance } from "@/hooks/use-analysis";
 import { useTaskStatus } from "@/hooks/use-videos";
+import { BeatScoreCard } from "@/components/ai/beat-score-card";
+import { ShortTimelineAnalysis } from "@/components/ai/short-timeline-analysis";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +112,7 @@ export default function ShortDetailPage() {
 
   const s = short.data;
   const m = metrics.data;
+  const analysisData = analysis.data;
 
   return (
     <div className="space-y-6">
@@ -263,7 +266,7 @@ export default function ShortDetailPage() {
           )}
 
           {/* Performance Analysis */}
-          {analysis.data && (
+          {analysisData && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -274,22 +277,50 @@ export default function ShortDetailPage() {
               <CardContent className="space-y-4">
                 {/* Scores */}
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {Object.entries(analysis.data.scores).map(([key, val]) =>
+                  {Object.entries(analysisData.scores).map(([key, val]) =>
                     val != null ? (
                       <div key={key} className="rounded-lg border p-2 text-center">
                         <p className="text-xs text-muted-foreground capitalize">{key}</p>
-                        <p className="text-lg font-bold">{Math.round(val * 100)}%</p>
+                        <p className="text-lg font-bold">{formatAnalysisScore(val)}</p>
                       </div>
                     ) : null
                   )}
                 </div>
 
+                {analysisData.script_adherence && (
+                  <div className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold">Aderencia ao Roteiro</h4>
+                      <Badge variant="outline">
+                        {analysisData.script_adherence.script_adherence_score != null
+                          ? `${Math.round(analysisData.script_adherence.script_adherence_score * 100)}%`
+                          : "sem score"}
+                      </Badge>
+                    </div>
+                    {analysisData.script_adherence.major_differences.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {analysisData.script_adherence.major_differences.slice(0, 3).map((item, i) => (
+                          <li key={i} className="text-xs text-muted-foreground">&bull; {item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {analysisData.beat_scores && (
+                  <BeatScoreCard scores={analysisData.beat_scores} />
+                )}
+
+                {analysisData.timeline_analysis && (
+                  <ShortTimelineAnalysis timeline={analysisData.timeline_analysis} />
+                )}
+
                 {/* Strengths */}
-                {analysis.data.strengths && analysis.data.strengths.length > 0 && (
+                {analysisData.strengths && analysisData.strengths.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold mb-1">Pontos Fortes</h4>
                     <ul className="space-y-1">
-                      {analysis.data.strengths.map((p, i) => (
+                      {analysisData.strengths.map((p, i) => (
                         <li key={i} className="text-sm text-muted-foreground">
                           <span className="font-medium text-foreground">{p.aspect}</span>: {p.description}
                         </li>
@@ -299,11 +330,11 @@ export default function ShortDetailPage() {
                 )}
 
                 {/* Weaknesses */}
-                {analysis.data.weaknesses && analysis.data.weaknesses.length > 0 && (
+                {analysisData.weaknesses && analysisData.weaknesses.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold mb-1">Pontos Fracos</h4>
                     <ul className="space-y-1">
-                      {analysis.data.weaknesses.map((p, i) => (
+                      {analysisData.weaknesses.map((p, i) => (
                         <li key={i} className="text-sm text-muted-foreground">
                           <span className="font-medium text-foreground">{p.aspect}</span>: {p.description}
                           {p.suggestion && <span className="block text-xs italic mt-0.5">Sugestao: {p.suggestion}</span>}
@@ -314,16 +345,18 @@ export default function ShortDetailPage() {
                 )}
 
                 {/* Learnings */}
-                {analysis.data.actionable_learnings && analysis.data.actionable_learnings.length > 0 && (
+                {analysisData.actionable_learnings && analysisData.actionable_learnings.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold mb-1">Aprendizados</h4>
                     <ul className="space-y-1">
-                      {analysis.data.actionable_learnings.map((l, i) => (
+                      {analysisData.actionable_learnings.map((l, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm">
-                          <Badge variant={l.priority === "high" ? "destructive" : l.priority === "medium" ? "default" : "secondary"} className="shrink-0 text-[10px]">
-                            {l.priority}
+                          <Badge variant={l.priority === "high" || l.sentiment === "negative" ? "destructive" : l.priority === "medium" || l.sentiment === "positive" ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                            {l.priority ?? l.sentiment ?? l.category ?? "learn"}
                           </Badge>
-                          <span className="text-muted-foreground">{l.learning}</span>
+                          <span className="text-muted-foreground">
+                            {l.learning ?? l.claim ?? l.recommended_action}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -489,4 +522,9 @@ function formatClock(seconds: number): string {
   const minutes = Math.floor(total / 60);
   const remainder = total % 60;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatAnalysisScore(value: number): string {
+  if (value <= 1) return `${Math.round(value * 100)}%`;
+  return `${value.toFixed(1)}/10`;
 }

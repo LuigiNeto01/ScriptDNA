@@ -17,10 +17,13 @@ import { useScripts } from "@/hooks/use-scripts";
 import { useYouTubeChannel, useYouTubeShorts } from "@/hooks/use-youtube";
 import { useInsights } from "@/hooks/use-insights";
 import { useSuggestions } from "@/hooks/use-suggestions";
+import { useAiCosts, useDetailedHealth } from "@/hooks/use-observability";
 import {
   AlertCircle,
   Clock,
+  DollarSign,
   FileText,
+  HeartPulse,
   Lightbulb,
   Loader2,
   Palette,
@@ -76,6 +79,8 @@ export default function DashboardPage() {
   const insights = useInsights({ active_only: true, limit: 1 });
   const suggestions = useSuggestions({ status: "pending", limit: 3 });
 
+  const aiCosts = useAiCosts(30);
+  const systemHealth = useDetailedHealth();
   const connected = channel.data?.connected === true;
 
   return (
@@ -118,25 +123,25 @@ export default function DashboardPage() {
         ) : (
           <>
             <MetricCard
-              title="Videos Analisados"
+              title="Vídeos Analisados"
               value={metrics.data?.total_videos ?? 0}
               icon={Video}
             />
             <MetricCard
               title="Roteiros Criados"
-              value={scripts.data?.length ?? 0}
+              value={metrics.data?.total_scripts ?? scripts.data?.length ?? 0}
               icon={FileText}
               description="Roteiros versionados"
             />
             <MetricCard
               title="Shorts Importados"
-              value={shorts.data?.total ?? 0}
+              value={metrics.data?.total_shorts ?? shorts.data?.total ?? 0}
               icon={PlugZap}
               description={connected ? "YouTube conectado" : "Canal pendente"}
             />
             <MetricCard
               title="Insights Ativos"
-              value={insights.data?.total ?? 0}
+              value={metrics.data?.active_insights ?? insights.data?.total ?? 0}
               icon={Lightbulb}
               description="Aprendizados validados"
             />
@@ -278,7 +283,7 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Videos Recentes</CardTitle>
+          <CardTitle>Vídeos Recentes</CardTitle>
           <CardDescription>Ultimos videos processados na biblioteca</CardDescription>
         </CardHeader>
         <CardContent>
@@ -294,7 +299,7 @@ export default function DashboardPage() {
           ) : !recentVideos.data?.length ? (
             <EmptyState
               icon={Video}
-              title="Nenhum video ainda"
+              title="Nenhum vídeo ainda"
               description="Importe seu primeiro video para comecar a analisar roteiros."
               action={<LinkButton href="/import">Importar Video</LinkButton>}
             />
@@ -325,7 +330,79 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>Operacao IA</CardTitle>
+              <CardDescription>Resumo de custos, runs e status do sistema</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <LinkButton href="/dashboard/ai-costs" variant="outline" size="sm">
+                Custos IA
+              </LinkButton>
+              <LinkButton href="/system/health" variant="outline" size="sm">
+                Sistema
+              </LinkButton>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <DollarSign className="h-4 w-4" />
+                Custo Estimado (30d)
+              </div>
+              <p className="mt-1 text-xl font-bold">
+                {aiCosts.data?.total_cost_usd != null
+                  ? `$${aiCosts.data.total_cost_usd.toFixed(2)}`
+                  : "-"}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="h-4 w-4" />
+                Runs de IA (30d)
+              </div>
+              <p className="mt-1 text-xl font-bold">
+                {aiCosts.data?.total_runs ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <AlertCircle className="h-4 w-4" />
+                Erros Recentes
+              </div>
+              <p className="mt-1 text-xl font-bold">
+                {aiCosts.data?.error_runs ?? 0}
+              </p>
+              {aiCosts.data?.error_rate != null && aiCosts.data.error_rate > 0 && (
+                <p className="text-xs text-destructive">
+                  {(aiCosts.data.error_rate * 100).toFixed(1)}% taxa de erro
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <HeartPulse className="h-4 w-4" />
+                Status Geral
+              </div>
+              <p className="mt-1 text-xl font-bold">
+                {systemHealth.isLoading
+                  ? "..."
+                  : systemHealth.data?.status === "ok"
+                    ? "OK"
+                    : systemHealth.data?.status === "degraded"
+                      ? "Degradado"
+                      : "-"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           title="Estilos Criados"
           value={metrics.data?.total_styles ?? 0}
@@ -346,7 +423,37 @@ export default function DashboardPage() {
           value={formatDuration(metrics.data?.avg_hook_duration)}
           icon={Clock}
         />
+        <MetricCard
+          title="Views Medias"
+          value={formatCompact(metrics.data?.avg_views)}
+          icon={TrendingUp}
+          description="Shorts do canal"
+        />
+        <MetricCard
+          title="Retencao Media"
+          value={formatPercent(metrics.data?.avg_retention)}
+          icon={Clock}
+          description="Media disponivel"
+        />
+        <MetricCard
+          title="Engajamento Medio"
+          value={formatPercent(metrics.data?.avg_engagement)}
+          icon={Sparkles}
+          description="Media disponivel"
+        />
       </div>
     </div>
   );
+}
+
+function formatCompact(value: number | null | undefined): string {
+  if (value == null) return "-";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return `${Math.round(value)}`;
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value == null) return "-";
+  return `${value.toFixed(1)}%`;
 }

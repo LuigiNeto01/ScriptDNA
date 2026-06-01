@@ -51,6 +51,13 @@ async function parseErrorResponse(res: Response) {
     ? formatValidationError(payload as FastApiValidationError)
     : null;
 
+  if (res.status === 429) {
+    const detail =
+      (payload as { detail?: string })?.detail ??
+      "Voce atingiu o limite temporario dessa acao. Tente novamente em alguns minutos.";
+    return new ApiClientError(429, "RATE_LIMIT_EXCEEDED", detail, payload);
+  }
+
   return new ApiClientError(
     res.status,
     apiError?.error?.code ?? (res.status === 422 ? "VALIDATION_ERROR" : "UNKNOWN"),

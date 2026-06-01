@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Sparkles, Save, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { GeneratedScript, ScriptLine } from "@/types/api";
+import type { GeneratedScript, GenerateScriptResponse, ScriptLine } from "@/types/api";
 
 const HOOK_TYPES = [
   { value: "curiosity_gap", label: "Lacuna de Curiosidade" },
@@ -29,6 +29,17 @@ const HOOK_TYPES = [
 
 function firstSliderValue(value: number | readonly number[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function pickGeneratedScript(data: GenerateScriptResponse): GeneratedScript {
+  if ("variants" in data) {
+    return (
+      data.variants.find((variant) => variant.variant_id === data.recommended_variant) ??
+      data.variants[0]
+    );
+  }
+
+  return data;
 }
 
 export default function NewScriptPage() {
@@ -61,7 +72,7 @@ export default function NewScriptPage() {
       },
       {
         onSuccess: (res) => {
-          setGenerated(res.data);
+          setGenerated(pickGeneratedScript(res.data));
         },
       }
     );

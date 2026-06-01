@@ -21,6 +21,10 @@ import {
   Lightbulb,
   Sparkles,
   LogOut,
+  DollarSign,
+  HeartPulse,
+  FlaskConical,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -40,6 +44,13 @@ const toolsNavItems = [
   { href: "/import", label: "Importar", icon: Upload },
   { href: "/generate", label: "Gerador", icon: PenTool },
   { href: "/styles", label: "Estilos", icon: Palette },
+  { href: "/experiments", label: "Experimentos", icon: FlaskConical },
+  { href: "/strategy", label: "Estrategia", icon: TrendingUp },
+];
+
+const adminNavItems = [
+  { href: "/dashboard/ai-costs", label: "Custos IA", icon: DollarSign },
+  { href: "/system/health", label: "Sistema", icon: HeartPulse },
 ];
 
 function NavItem({
@@ -115,6 +126,18 @@ export function Sidebar() {
         )}
 
         {toolsNavItems.map((item) => (
+          <NavItem key={item.href} {...item} pathname={pathname} sidebarOpen={sidebarOpen} />
+        ))}
+
+        <Separator className="my-2" />
+
+        {sidebarOpen && (
+          <span className="hidden px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:inline">
+            Operacao
+          </span>
+        )}
+
+        {adminNavItems.map((item) => (
           <NavItem key={item.href} {...item} pathname={pathname} sidebarOpen={sidebarOpen} />
         ))}
       </nav>

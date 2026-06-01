@@ -35,7 +35,8 @@ import {
   useImproveScript,
   useGenerateHooks,
 } from "@/hooks/use-generate";
-import type { GeneratedScript } from "@/types/api";
+import type { GeneratedScript, GeneratedVariant, GenerateScriptResponse } from "@/types/api";
+import { VariantComparison } from "@/components/ai/variant-comparison";
 import {
   PenTool,
   Wand2,
@@ -48,17 +49,23 @@ import {
   Target,
   MessageCircleQuestion,
   Lightbulb,
+  GitCompare,
+  ShieldCheck,
 } from "lucide-react";
 
 const generateSchema = z.object({
   theme: z.string().min(1, "Tema obrigatório"),
   idea: z.string().max(2000).optional(),
   duration: z.number().min(15).max(600),
+  platform: z.string().optional(),
   niche: z.string().min(1, "Nicho obrigatório"),
+  goal: z.string().optional(),
   style_profile_id: z.string().optional(),
   aggressiveness: z.number().min(1).max(10),
   hook_type: z.string().min(1, "Tipo de hook obrigatório"),
   cta: z.string().optional(),
+  variants: z.number().min(1).max(5),
+  save: z.boolean(),
 });
 
 type GenerateFormData = z.infer<typeof generateSchema>;
@@ -204,6 +211,11 @@ function ScriptOutput({ script }: { script: GeneratedScript }) {
                       {line.retention_note}
                     </p>
                   )}
+                  {line.viewer_question && (
+                    <p className="text-xs text-primary/80">
+                      Pergunta do espectador: {line.viewer_question}
+                    </p>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -279,9 +291,91 @@ function ScriptOutput({ script }: { script: GeneratedScript }) {
               </div>
             </>
           )}
+
+          {script.quality_evaluation && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">
+                    Avaliacao de Qualidade
+                  </span>
+                  <Badge variant="outline">
+                    {Math.round(script.quality_evaluation.quality_score * 100)}%
+                  </Badge>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-5">
+                  {Object.entries(script.quality_evaluation.scores).map(
+                    ([key, value]) => (
+                      <div key={key} className="rounded-md border p-2">
+                        <p className="text-[11px] uppercase text-muted-foreground">
+                          {key}
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {Math.round((value ?? 0) * 100)}%
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+                {(script.quality_evaluation.fix_suggestions?.length ?? 0) > 0 && (
+                  <ul className="space-y-1">
+                    {script.quality_evaluation.fix_suggestions?.map(
+                      (suggestion, i) => (
+                        <li key={i} className="text-xs text-muted-foreground">
+                          &bull; {suggestion}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+
+          {(script.evidence_used?.length ||
+            script.patterns_applied?.length ||
+            script.patterns_avoided?.length ||
+            script.predicted_retention_risks?.length ||
+            script.improvement_suggestions?.length) && (
+            <>
+              <Separator />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ArrayList title="Evidencias usadas" items={script.evidence_used} />
+                <ArrayList title="Padroes aplicados" items={script.patterns_applied} />
+                <ArrayList title="Padroes evitados" items={script.patterns_avoided} />
+                <ArrayList title="Riscos de retencao" items={script.predicted_retention_risks} />
+                <ArrayList title="Melhorias sugeridas" items={script.improvement_suggestions} />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+function ArrayList({
+  title,
+  items,
+}: {
+  title: string;
+  items?: string[] | null;
+}) {
+  if (!items?.length) return null;
+
+  return (
+    <div className="rounded-md border p-3">
+      <p className="mb-2 text-xs font-medium">{title}</p>
+      <ul className="space-y-1">
+        {items.slice(0, 4).map((item, i) => (
+          <li key={i} className="text-xs text-muted-foreground">
+            &bull; {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -331,6 +425,12 @@ function getErrorMessage(...errors: unknown[]) {
   return "Erro ao gerar. Verifique os parÃ¢metros e tente novamente.";
 }
 
+function isVariantsResponse(
+  data: GenerateScriptResponse
+): data is { variants: GeneratedVariant[]; recommended_variant: number } {
+  return "variants" in data;
+}
+
 export default function GeneratePage() {
   return (
     <Suspense>
@@ -345,6 +445,8 @@ function GeneratePageContent() {
 
   const [generatedScript, setGeneratedScript] =
     useState<GeneratedScript | null>(null);
+  const [generatedVariants, setGeneratedVariants] = useState<GeneratedVariant[] | null>(null);
+  const [recommendedVariant, setRecommendedVariant] = useState<number | null>(null);
   const [generatedHooks, setGeneratedHooks] = useState<string[] | null>(null);
   const [improveText, setImproveText] = useState("");
 
@@ -366,11 +468,15 @@ function GeneratePageContent() {
       theme: "",
       idea: "",
       duration: 60,
+      platform: "youtube_shorts",
       niche: "",
+      goal: "retention",
       style_profile_id: "",
       aggressiveness: 5,
       hook_type: "curiosity_gap",
       cta: "",
+      variants: 1,
+      save: false,
     },
   });
 
@@ -390,13 +496,24 @@ function GeneratePageContent() {
 
   const onGenerate = async (data: GenerateFormData) => {
     setGeneratedHooks(null);
+    setGeneratedVariants(null);
     try {
       const result = await generateScript.mutateAsync({
         ...data,
         style_profile_id: data.style_profile_id ?? "",
         cta: data.cta ?? "",
       });
-      setGeneratedScript(result.data);
+      if (isVariantsResponse(result.data)) {
+        const response = result.data;
+        setGeneratedVariants(response.variants);
+        setRecommendedVariant(response.recommended_variant);
+        setGeneratedScript(
+          response.variants.find((v) => v.variant_id === response.recommended_variant) ??
+            response.variants[0]
+        );
+      } else {
+        setGeneratedScript(result.data);
+      }
     } catch {
       setGeneratedScript(null);
     }
@@ -689,6 +806,33 @@ function GeneratePageContent() {
                       data-testid="gen-cta-input"
                     />
                   </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="gen-goal">Objetivo</Label>
+                      <Input
+                        id="gen-goal"
+                        placeholder="retencao, views, inscritos"
+                        {...register("goal")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gen-variants">Variantes</Label>
+                      <Input
+                        id="gen-variants"
+                        type="number"
+                        min={1}
+                        max={5}
+                        {...register("variants", { valueAsNumber: true })}
+                        data-testid="gen-variants-input"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+                    <input type="checkbox" {...register("save")} />
+                    Salvar automaticamente a variante recomendada
+                  </label>
                 </div>
 
                 <Separator />
@@ -871,6 +1015,25 @@ function GeneratePageContent() {
 
       {/* Output */}
       <AnimatePresence>
+        {generatedVariants && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3"
+          >
+            <div className="flex items-center gap-2">
+              <GitCompare className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">
+                Comparacao de variantes
+              </h2>
+            </div>
+            <VariantComparison
+              variants={generatedVariants}
+              recommendedVariant={recommendedVariant ?? undefined}
+              onSelect={(variant) => setGeneratedScript(variant)}
+            />
+          </motion.div>
+        )}
         {generatedScript && <ScriptOutput script={generatedScript} />}
         {generatedHooks && <HooksOutput hooks={generatedHooks} />}
       </AnimatePresence>
