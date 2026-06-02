@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { renderWithProviders } from "../helpers";
 import { AiCostSummaryCards } from "@/components/observability/ai-cost-summary-cards";
 import { AgentRunTable } from "@/components/observability/agent-run-table";

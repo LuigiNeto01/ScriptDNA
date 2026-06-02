@@ -1,13 +1,4 @@
-/**
- * Testes de componente — Library (/library)
- *
- * Cobre:
- * - Renderiza grid de vídeos
- * - Empty state quando lista vazia
- * - Campo de busca existe
- * - Filtro de niche existe
- */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
@@ -16,7 +7,7 @@ import { mockVideo } from "../mocks/handlers";
 import LibraryPage from "@/app/library/page";
 
 describe("Library Page", () => {
-  it("renders video cards when data is available", async () => {
+  it("renders reference cards when data is available", async () => {
     renderWithProviders(<LibraryPage />);
 
     await waitFor(() => {
@@ -24,7 +15,7 @@ describe("Library Page", () => {
     });
   });
 
-  it("shows empty state when no videos", async () => {
+  it("shows educational empty state when no references exist", async () => {
     server.use(
       http.get("http://localhost:8000/api/videos", () => {
         return HttpResponse.json({ data: [] });
@@ -34,10 +25,7 @@ describe("Library Page", () => {
     renderWithProviders(<LibraryPage />);
 
     await waitFor(() => {
-      expect(
-        screen.queryByText(/nenhum vídeo/i) ||
-          screen.queryByText(/biblioteca vazia/i)
-      ).toBeTruthy();
+      expect(screen.getByText(/voce ainda nao adicionou referencias/i)).toBeInTheDocument();
     });
   });
 
@@ -45,8 +33,7 @@ describe("Library Page", () => {
     renderWithProviders(<LibraryPage />);
 
     await waitFor(() => {
-      const search = screen.getByTestId("search-input");
-      expect(search).toBeInTheDocument();
+      expect(screen.getByTestId("search-input")).toBeInTheDocument();
     });
   });
 
@@ -54,8 +41,7 @@ describe("Library Page", () => {
     renderWithProviders(<LibraryPage />);
 
     await waitFor(() => {
-      const filter = screen.getByTestId("niche-filter");
-      expect(filter).toBeInTheDocument();
+      expect(screen.getByTestId("niche-filter")).toBeInTheDocument();
     });
   });
 
@@ -63,9 +49,7 @@ describe("Library Page", () => {
     renderWithProviders(<LibraryPage />);
 
     await waitFor(() => {
-      expect(
-        screen.queryByText(/done/i) || screen.queryByTestId("status-badge")
-      ).toBeTruthy();
+      expect(screen.queryByTestId("status-badge")).toBeTruthy();
     });
   });
 });

@@ -64,12 +64,19 @@ export const mockGeneratedScript = {
       line: "Você não vai acreditar no que aconteceu",
       function: "hook",
       retention_note: "curiosity gap forte",
+      viewer_question: "O que aconteceu exatamente?",
     },
   ],
   analysis: {
     hook_strength: 0.85,
-    curiosity_gaps: 3,
+    curiosity_gaps: ["gancho criou pergunta imediata no espectador"],
     weak_points: ["payoff poderia ser mais forte"],
+  },
+  quality_evaluation: {
+    quality_score: 0.78,
+    scores: { hook: 0.85, retention: 0.75, clarity: 0.80, cta: 0.70, style: null },
+    risks: { copy_reference: 0.2, long_sentences: 0.1, early_payoff: 0.6 },
+    fix_suggestions: ["Adicione mais conflito no meio do roteiro"],
   },
 };
 
@@ -78,6 +85,193 @@ export const mockMetrics = {
   total_styles: 3,
   top_techniques: [{ name: "curiosity_gap", count: 15 }],
   avg_hook_duration: 3.2,
+};
+
+export const mockScriptVersion = {
+  id: "version-001",
+  script_id: "script-001",
+  version_number: 1,
+  hook: "Você não vai acreditar",
+  narrative_structure: null,
+  cta: "Se inscreva!",
+  lines: [
+    {
+      start: "0",
+      end: "3",
+      line: "Você não vai acreditar no que aconteceu",
+      function: "hook",
+      retention_note: "curiosity gap forte",
+      viewer_question: "O que aconteceu exatamente?",
+    },
+  ],
+  analysis: {
+    hook_strength: 0.85,
+    curiosity_gaps: ["gancho criou pergunta imediata no espectador"],
+    weak_points: ["payoff poderia ser mais forte"],
+    patterns_applied: ["curiosity gap"],
+    patterns_avoided: ["payoff antecipado"],
+    predicted_retention_risks: ["entrega de promessa cedo demais"],
+    improvement_suggestions: ["adicionar conflito no meio"],
+  },
+  generation_params: {
+    context_snapshot: {
+      quality_score: 0.78,
+      variant_id: 1,
+      insight_ids: ["insight-001"],
+      reference_ids: [],
+      patterns_applied: ["curiosity gap"],
+      patterns_avoided: ["payoff antecipado"],
+    },
+  },
+  change_summary: "Versão inicial gerada pela IA",
+  created_by: "ai_generation" as const,
+  created_at: "2024-01-01T00:00:00Z",
+};
+
+export const mockScript = {
+  id: "script-001",
+  user_id: "user-001",
+  current_version_id: "version-001",
+  title: "Minecraft Hooks Test",
+  theme: "Atualização do Minecraft",
+  objective: "views",
+  niche: "gaming",
+  speaking_style: null,
+  estimated_duration_seconds: 60,
+  status: "draft" as const,
+  youtube_video_id: null,
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
+  current_version: mockScriptVersion,
+};
+
+export const mockChannel = {
+  connected: true,
+  channel_id: "UCtest123",
+  channel_name: "TestChannel",
+  thumbnail_url: null,
+  subscriber_count: 1500,
+  video_count: 24,
+};
+
+export const mockShort = {
+  id: "short-001",
+  youtube_id: "yt-short-001",
+  youtube_video_id: "yt-short-001",
+  title: "Short de Teste",
+  description: "Descricao do Short",
+  thumbnail_url: null,
+  duration_seconds: 58,
+  published_at: "2024-01-01T00:00:00Z",
+  tags: [],
+  transcript: "Transcricao de teste",
+  transcript_source: "manual",
+  script_id: null,
+  synced_at: "2024-01-01T00:00:00Z",
+  view_count: 5200,
+  like_count: 340,
+  comment_count: 28,
+};
+
+export const mockShortMetrics = {
+  id: "metrics-001",
+  youtube_short_id: "short-001",
+  views: 5200,
+  likes: 340,
+  comments: 28,
+  shares: 12,
+  subscribers_gained: 7,
+  average_view_duration_seconds: 41,
+  average_view_percentage: 72,
+  impressions: 9000,
+  impressions_ctr: 0.08,
+  engagement_rate: 7.2,
+  retention_score: 0.72,
+  source: "manual" as const,
+  collected_at: "2024-01-02T00:00:00Z",
+  published_at: "2024-01-01T00:00:00Z",
+};
+
+export const mockPerformanceAnalysis = {
+  id: "analysis-001",
+  youtube_short_id: "short-001",
+  script_id: null,
+  scores: {
+    hook: 0.8,
+    rhythm: 0.7,
+    curiosity: 0.6,
+    retention: 0.75,
+    clarity: 0.8,
+    promise_delivery: 0.7,
+    cta: 0.5,
+    narrative: 0.8,
+    overall: 0.76,
+  },
+  strengths: [{ aspect: "hook", description: "A abertura prende atencao rapidamente" }],
+  weaknesses: [{ aspect: "cta", description: "CTA discreto", suggestion: "Reforce o proximo passo" }],
+  actionable_learnings: [{ learning: "Repita ganchos com promessa clara", priority: "high" as const }],
+  script_correlation: [],
+  script_adherence: null,
+  timeline_analysis: null,
+  beat_scores: { hook: 0.8, setup: 0.6, conflict: 0.7, escalation: 0.5, payoff: 0.9, cta: 0.4 },
+  created_at: "2024-01-02T00:00:00Z",
+};
+
+export const mockInsight = {
+  id: "insight-001",
+  title: "Perguntas no gancho aumentam retenção",
+  description: "Vídeos que começam com pergunta retêm 23% mais que os que começam com afirmação.",
+  category: "hook" as const,
+  sentiment: "positive" as const,
+  confidence: 0.85,
+  times_validated: 4,
+  niche: "gaming",
+  theme: null,
+  speaking_style: null,
+  video_type: null,
+  evidence: [
+    { short_id: "short-001", metric: "retention", value: 0.78, context: "gancho com pergunta" },
+  ],
+  is_active: true,
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
+};
+
+export const mockInsightNegative = {
+  id: "insight-002",
+  title: "Vídeos longos demais perdem audiência",
+  description: "Shorts acima de 75s tiveram retenção 35% menor que os abaixo de 60s.",
+  category: "retention" as const,
+  sentiment: "negative" as const,
+  confidence: 0.75,
+  times_validated: 3,
+  niche: "gaming",
+  theme: null,
+  speaking_style: null,
+  video_type: null,
+  evidence: [],
+  is_active: true,
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
+};
+
+export const mockSuggestion = {
+  id: "suggestion-001",
+  title: "Teste A/B de ganchos com pergunta",
+  description: "Com base nos seus aprendizados, tente um Short que começa com uma pergunta direta.",
+  category: "high_view_potential" as const,
+  niche: "gaming",
+  theme: "ganchos",
+  estimated_duration_seconds: 60,
+  suggested_hook: "Você sabia que 90% dos criadores erram esse passo?",
+  suggested_structure: "hook → conflito → payoff → CTA",
+  based_on_shorts: [],
+  based_on_insights: [],
+  status: "pending" as const,
+  converted_script_id: null,
+  confidence_score: 0.82,
+  justification: "Este formato teve alto CTR nos últimos 3 Shorts analisados.",
+  created_at: "2024-01-01T00:00:00Z",
 };
 
 // ============================================================
@@ -209,6 +403,105 @@ export const mockTrends = [
 // ============================================================
 
 export const handlers = [
+  // Scripts
+  http.get(`${API_URL}/api/scripts`, () => {
+    return HttpResponse.json({ data: [mockScript] });
+  }),
+
+  http.get(`${API_URL}/api/scripts/:id`, ({ params }) => {
+    if (params.id === mockScript.id) {
+      return HttpResponse.json({ data: mockScript });
+    }
+    return HttpResponse.json(
+      { error: { code: "NOT_FOUND", message: "Roteiro não encontrado" } },
+      { status: 404 }
+    );
+  }),
+
+  http.get(`${API_URL}/api/scripts/:id/versions`, ({ params }) => {
+    if (params.id === mockScript.id) {
+      return HttpResponse.json({ data: [mockScriptVersion] });
+    }
+    return HttpResponse.json({ data: [] });
+  }),
+
+  http.patch(`${API_URL}/api/scripts/:id/status`, ({ params }) => {
+    if (params.id === mockScript.id) {
+      return HttpResponse.json({ data: { ...mockScript, status: "approved" } });
+    }
+    return HttpResponse.json({ data: mockScript });
+  }),
+
+  http.post(`${API_URL}/api/scripts/:id/versions`, ({ params }) => {
+    if (params.id === mockScript.id) {
+      return HttpResponse.json({
+        data: { ...mockScriptVersion, version_number: 2, id: "version-002" },
+      });
+    }
+    return HttpResponse.json({ data: mockScriptVersion });
+  }),
+
+  http.post(`${API_URL}/api/scripts/:id/link-video`, ({ params }) => {
+    if (params.id === mockScript.id) {
+      return HttpResponse.json({ data: { ...mockScript, youtube_video_id: "yt-linked-001" } });
+    }
+    return HttpResponse.json({ data: mockScript });
+  }),
+
+  // YouTube
+  http.get(`${API_URL}/api/youtube/channel`, () => {
+    return HttpResponse.json({ data: mockChannel });
+  }),
+
+  http.get(`${API_URL}/api/youtube/shorts`, () => {
+    return HttpResponse.json({
+      data: { items: [mockShort], total: 1, page: 0, limit: 12 },
+    });
+  }),
+
+  http.get(`${API_URL}/api/youtube/shorts/:id`, () => {
+    return HttpResponse.json({ data: mockShort });
+  }),
+
+  http.get(`${API_URL}/api/youtube/shorts/:id/metrics`, () => {
+    return HttpResponse.json({ data: mockShortMetrics });
+  }),
+
+  http.get(`${API_URL}/api/youtube/shorts/:id/metrics/history`, () => {
+    return HttpResponse.json({ data: [{ views: 5200, likes: 340, comments: 28, collected_at: "2024-01-02T00:00:00Z" }] });
+  }),
+
+  http.get(`${API_URL}/api/auth/youtube/connect`, () => {
+    return HttpResponse.json({
+      data: { authorization_url: "https://accounts.google.com/o/oauth2/auth?test=1" },
+    });
+  }),
+
+  // Insights
+  http.get(`${API_URL}/api/insights`, () => {
+    return HttpResponse.json({ data: { items: [mockInsight, mockInsightNegative], total: 2 } });
+  }),
+
+  http.patch(`${API_URL}/api/insights/:id`, ({ params }) => {
+    const insight = params.id === mockInsight.id ? mockInsight : mockInsightNegative;
+    return HttpResponse.json({ data: { ...insight, is_active: !insight.is_active } });
+  }),
+
+  http.post(`${API_URL}/api/insights/generate`, () => {
+    return HttpResponse.json({ data: { task_id: "task-insights-1" } }, { status: 202 });
+  }),
+
+  // Suggestions
+  http.get(`${API_URL}/api/suggestions`, () => {
+    return HttpResponse.json({ data: { items: [mockSuggestion], total: 1 } });
+  }),
+
+  http.post(`${API_URL}/api/suggestions/:id/convert`, () => {
+    return HttpResponse.json({
+      data: { script_id: mockScript.id, version_id: mockScriptVersion.id },
+    });
+  }),
+
   // Videos
   http.get(`${API_URL}/api/videos`, () => {
     return HttpResponse.json({ data: [mockVideo] });
@@ -387,5 +680,22 @@ export const handlers = [
         ],
       },
     });
+  }),
+
+  // Analysis (Phase 6)
+  http.post(`${API_URL}/api/analysis/channel`, () => {
+    return HttpResponse.json({ data: { task_id: "task-channel-1" } }, { status: 202 });
+  }),
+
+  http.post(`${API_URL}/api/analysis/patterns`, () => {
+    return HttpResponse.json({ data: { task_id: "task-patterns-1" } }, { status: 202 });
+  }),
+
+  http.get(`${API_URL}/api/analysis/performance/:shortId`, () => {
+    return HttpResponse.json({ data: mockPerformanceAnalysis });
+  }),
+
+  http.post(`${API_URL}/api/analysis/performance/:shortId`, () => {
+    return HttpResponse.json({ data: { task_id: "task-performance-1" } }, { status: 202 });
   }),
 ];
