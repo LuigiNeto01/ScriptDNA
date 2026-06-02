@@ -75,7 +75,7 @@ export default function LoginPage() {
               Entrar
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Ainda nao tem conta?{" "}
+              Ainda não tem conta?{" "}
               <Link href="/register" className="text-primary hover:underline">
                 Criar conta
               </Link>
