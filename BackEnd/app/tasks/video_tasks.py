@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yt_dlp import YoutubeDL
 
 from app.agents.analysis_agent import AnalysisAgent
-from app.agents.transcription_agent import TranscriptionAgent
+from app.agents.transcription_agent import TranscriptionAgent, TranscriptUnavailableError
 from app.core.celery_app import celery_app
 from app.core.openai_client import get_openai_client
 from app.db.session import make_session_factory
@@ -67,8 +67,14 @@ def process_video_url(self, video_id: str, url: str):
     try:
         _run_async(_process_url(self, video_id, url))
     except Exception as exc:
-        logger.error("process_video_url failed", extra={"task_id": self.request.id, "error": str(exc)})
+        error_msg = str(exc)
+        logger.error("process_video_url failed", extra={"task_id": self.request.id, "error": error_msg})
         _run_async(_set_error(video_id))
+        # Erros permanentes nao melhoram com retry
+        _PERMANENT_ERRORS = ("HTTP Error 400", "HTTP Error 401", "HTTP Error 403",
+                             "Sign in", "bot", "429", "Too Many Requests")
+        if any(code in error_msg for code in _PERMANENT_ERRORS):
+            raise exc
         raise self.retry(exc=exc, countdown=_backoff_delay(self.request.retries))
 
 
@@ -119,6 +125,41 @@ async def _process_text(task, video_id: str, text: str):
 
 
 async def _process_url(task, video_id: str, url: str):
+    agent = TranscriptionAgent()
+
+    # Caminho 1: transcript API (sem download, sem custo, ~1-2s)
+    try:
+        _report_progress(task, 0.05, "fetching_transcript")
+        segments_data = await agent.run_from_url(url)
+        meta = await asyncio.to_thread(_fetch_youtube_meta, url)
+        logger.info("process_video_url: usando transcript API para %s", url)
+
+        vid = uuid.UUID(video_id)
+        session_factory = make_session_factory()
+        async with session_factory() as db:
+            video = await db.get(Video, vid)
+            if video:
+                if meta.get("title"):
+                    video.title = meta["title"][:500]
+                if meta.get("view_count") is not None:
+                    video.view_count = meta["view_count"]
+                if meta.get("like_count") is not None:
+                    video.like_count = meta["like_count"]
+                if meta.get("creator_name") and not video.creator_name:
+                    video.creator_name = meta["creator_name"][:200]
+                await db.commit()
+
+            _report_progress(task, 0.1, "transcribing")
+            await _update_status(db, vid, VideoStatus.TRANSCRIBING)
+            await _save_segments_and_analyze(task, db, vid, segments_data)
+        return
+
+    except TranscriptUnavailableError as exc:
+        logger.warning("Transcript API indisponivel, usando download+Whisper: %s", exc)
+    except Exception as exc:
+        logger.warning("Transcript API falhou (%s), usando download+Whisper", exc)
+
+    # Caminho 2: download + Whisper (fallback)
     file_path, meta = await asyncio.to_thread(_download_media_from_url, url)
     try:
         await _process_upload(task, video_id, file_path, url_meta=meta)
@@ -134,12 +175,79 @@ async def _process_url(task, video_id: str, url: str):
             pass
 
 
+def _fetch_youtube_meta(url: str) -> dict:
+    """Busca metadados do video sem fazer download (rapido, sem auth para publicos)."""
+    cookies_path = Path(os.environ.get("YTDLP_COOKIES_PATH", "/data/cookies.txt"))
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "skip_download": True,
+        "socket_timeout": 15,
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
+    }
+    if cookies_path.exists():
+        options["cookiefile"] = str(cookies_path)
+
+    try:
+        with YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False) or {}
+            return {
+                "title": info.get("title"),
+                "view_count": info.get("view_count"),
+                "like_count": info.get("like_count"),
+                "creator_name": info.get("uploader") or info.get("channel"),
+            }
+    except Exception as exc:
+        logger.warning("_fetch_youtube_meta falhou: %s", exc)
+        return {}
+
+
+def _build_ydl_attempts(base_options: dict) -> list[dict]:
+    """
+    Retorna lista de configuracoes para tentar em ordem:
+    1. Cliente iOS com cookies — bypassa JS challenge (signature/n-challenge) completamente
+    2. Cliente iOS sem cookies — fallback para videos publicos
+    O cliente iOS usa URLs de download pre-assinadas que nao precisam de challenge solving.
+    """
+    # android client bypassa EJS/PO-Token challenge completamente
+    android_args = {"extractor_args": {"youtube": {"player_client": ["android"]}}}
+
+    attempts = [
+        {**base_options, **android_args},
+    ]
+    logger.info("yt-dlp: usando android client")
+    return attempts
+
+
+def _extract_meta_and_path(ydl: YoutubeDL, info: dict, tmp_dir: str) -> tuple[str, dict]:
+    meta = {
+        "title": info.get("title"),
+        "view_count": info.get("view_count"),
+        "like_count": info.get("like_count"),
+        "creator_name": info.get("uploader") or info.get("channel"),
+    }
+
+    downloaded = info.get("requested_downloads") or []
+    if downloaded and downloaded[0].get("filepath"):
+        return downloaded[0]["filepath"], meta
+
+    candidate = Path(ydl.prepare_filename(info))
+    if candidate.exists():
+        return str(candidate), meta
+
+    files = [p for p in Path(tmp_dir).iterdir() if p.is_file()]
+    if files:
+        return str(files[0]), meta
+
+    raise ValueError("Arquivo baixado nao encontrado no diretorio temporario")
+
+
 def _download_media_from_url(url: str) -> tuple[str, dict]:
     tmp_dir = tempfile.mkdtemp(prefix="scriptdna-url-")
-    output_template = str(Path(tmp_dir) / "%(id)s.%(ext)s")
-    options = {
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[ext=mp4]/best",
-        "outtmpl": output_template,
+    base_options = {
+        "format": "bestaudio/best",
+        "outtmpl": str(Path(tmp_dir) / "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
@@ -147,33 +255,23 @@ def _download_media_from_url(url: str) -> tuple[str, dict]:
         "socket_timeout": 30,
     }
 
-    # OAuth2 para autenticacao no YouTube (funciona no Docker sem browser)
-    # Token salvo em /data/oauth2_token (volume persistente)
-    options["username"] = "oauth2"
-    options["password"] = ""
+    attempts = _build_ydl_attempts(base_options)
+    last_exc: Exception | None = None
 
-    with YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=True)
-        meta = {
-            "title": info.get("title"),
-            "view_count": info.get("view_count"),
-            "like_count": info.get("like_count"),
-            "creator_name": info.get("uploader") or info.get("channel"),
-        }
+    for opts in attempts:
+        try:
+            with YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                return _extract_meta_and_path(ydl, info, tmp_dir)
+        except Exception as exc:
+            last_exc = exc
+            error_msg = str(exc)
+            is_auth_error = any(code in error_msg for code in ("401", "403", "Sign in", "bot"))
+            if not is_auth_error:
+                raise
+            logger.warning("yt-dlp: tentativa falhou (%s), tentando proximo metodo", error_msg[:120])
 
-        downloaded = info.get("requested_downloads") or []
-        if downloaded and downloaded[0].get("filepath"):
-            return downloaded[0]["filepath"], meta
-
-        candidate = Path(ydl.prepare_filename(info))
-        if candidate.exists():
-            return str(candidate), meta
-
-    files = [path for path in Path(tmp_dir).iterdir() if path.is_file()]
-    if files:
-        return str(files[0]), meta
-
-    raise ValueError("Nao foi possivel baixar a midia da URL")
+    raise last_exc or ValueError("Nao foi possivel baixar a midia da URL")
 
 
 async def _save_segments_and_analyze(

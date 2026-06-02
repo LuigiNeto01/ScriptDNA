@@ -1,12 +1,91 @@
+import logging
 import os
+import re
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
+
+import requests
+from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled, YouTubeTranscriptApi
 
 from app.core.openai_client import get_openai_client
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
+# Ordem de preferencia de idiomas para legendas
+_TRANSCRIPT_LANGUAGES = ["pt", "pt-BR", "pt-PT", "en", "en-US"]
+
+
+class TranscriptUnavailableError(Exception):
+    """Legenda nao disponivel no YouTube para este video."""
+
+
+def _extract_video_id(url: str) -> str | None:
+    """Extrai o video ID de URLs do YouTube (watch, shorts, youtu.be)."""
+    patterns = [
+        r"(?:v=|/shorts/|youtu\.be/)([A-Za-z0-9_-]{11})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _build_http_client() -> requests.Session | None:
+    """Retorna uma Session com cookies carregados se o arquivo existir."""
+    cookies_path = Path(os.environ.get("YTDLP_COOKIES_PATH", "/data/cookies.txt"))
+    if not cookies_path.exists():
+        return None
+    jar = MozillaCookieJar(str(cookies_path))
+    jar.load(ignore_discard=True, ignore_expires=True)
+    session = requests.Session()
+    session.cookies = jar  # type: ignore[assignment]
+    logger.info("Transcript API: usando cookies de %s", cookies_path)
+    return session
+
 
 class TranscriptionAgent:
     MAX_FILE_SIZE = settings.max_upload_size_bytes
+
+    async def run_from_url(self, url: str) -> list[dict]:
+        """
+        Busca a transcricao diretamente das legendas do YouTube.
+        Levanta TranscriptUnavailableError se nao houver legenda disponivel.
+        """
+        video_id = _extract_video_id(url)
+        if not video_id:
+            raise ValueError(f"Nao foi possivel extrair o video ID da URL: {url}")
+
+        http_client = _build_http_client()
+        ytt = YouTubeTranscriptApi(http_client=http_client) if http_client else YouTubeTranscriptApi()
+
+        try:
+            transcript_list = ytt.list_transcripts(video_id)
+            transcript = transcript_list.find_transcript(_TRANSCRIPT_LANGUAGES)
+            entries = transcript.fetch()
+        except (TranscriptsDisabled, NoTranscriptFound) as exc:
+            raise TranscriptUnavailableError(str(exc)) from exc
+
+        segments = []
+        total_duration = max((e.start + e.duration for e in entries), default=0)
+
+        for entry in entries:
+            start = round(entry.start, 2)
+            end = round(entry.start + entry.duration, 2)
+            text = entry.text.strip()
+            word_count = len(text.split())
+            position_percent = round((start / total_duration) * 100, 1) if total_duration else 0
+            segments.append({
+                "start": start,
+                "end": end,
+                "text": text,
+                "word_count": word_count,
+                "position_percent": position_percent,
+            })
+
+        logger.info("Transcript API: %d segmentos obtidos para %s", len(segments), video_id)
+        return self._apply_granularity(segments)
 
     async def run(self, file_path: str) -> list[dict]:
         path = Path(file_path)

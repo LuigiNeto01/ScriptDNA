@@ -32,6 +32,7 @@ Regras:
 - Use apenas estas funcoes narrativas: hook, setup, conflict, escalation, payoff, cta.
 - Abra uma curiosidade forte nos primeiros 3 segundos.
 - Nao revele o payoff principal cedo demais.
+- hook_strength: avalie honestamente de 0.0 a 1.0 o poder do hook gerado. Hook generico como "Vou te mostrar..." = 0.3. Hook com curiosity gap especifico e dado concreto = 0.85+. Seja criterioso.
 
 Responda APENAS com JSON valido:
 {
@@ -46,7 +47,7 @@ Responda APENAS com JSON valido:
     }
   ],
   "analysis": {
-    "hook_strength": 0.85,
+    "hook_strength": 0.0,
     "curiosity_gaps": [],
     "weak_points": [],
     "evidence_used": [],

@@ -23,6 +23,13 @@ IMPORTANTE sobre o campo "weak_points":
 - Descreva o problema de forma clara e acionável (ex: "CTA fraco, não gera urgência").
 - NÃO liste beats que estão bons ou com score alto. Se não houver pontos fracos, retorne [].
 
+IMPORTANTE sobre o campo "hook_strength":
+- Avalie honestamente de 0.0 a 1.0. Não use o valor do exemplo JSON.
+- Hook genérico ("Nesse vídeo vou te mostrar...") = 0.2 a 0.4.
+- Hook com curiosity gap vago = 0.5 a 0.65.
+- Hook com dado concreto + pergunta específica = 0.75 a 0.85.
+- Hook excepcional com padrão quebrado + promessa clara = 0.9+.
+
 Responda APENAS com JSON válido:
 {
   "improved_lines": [
@@ -36,7 +43,7 @@ Responda APENAS com JSON válido:
   ],
   "problems_found": ["problema 1", "problema 2"],
   "analysis": {
-    "hook_strength": 0.9,
+    "hook_strength": 0.0,
     "curiosity_gaps": ["pergunta implícita 1"],
     "weak_points": ["descrição do problema acionável"]
   }
