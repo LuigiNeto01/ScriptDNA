@@ -5,17 +5,14 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCompactNumber, formatDate, formatDuration, formatPercentInt } from "@/lib/formatters";
-import { usePerformanceAnalysis } from "@/hooks/use-analysis";
-import { useShortMetrics } from "@/hooks/use-youtube";
-import { BarChart3, Clock, Eye, FileText, Sparkles, Video } from "lucide-react";
+import { formatCompactNumber, formatDate, formatDuration, formatPercentInt, formatScriptStatus } from "@/lib/formatters";
+import { BarChart3, Clock, Eye, FileText, Link2, Sparkles, Video } from "lucide-react";
 import type { YouTubeShort } from "@/types/api";
 
 export function ShortCard({ short }: { short: YouTubeShort }) {
-  const metrics = useShortMetrics(short.id);
-  const analysis = usePerformanceAnalysis(short.id);
-  const m = metrics.data;
-  const analyzed = !!analysis.data;
+  const metrics = short.latest_metrics;
+  const analysisStatus = short.analysis_status;
+  const analyzed = !!analysisStatus?.has_performance_analysis;
 
   return (
     <Card className="h-full overflow-hidden transition-colors hover:bg-accent/50">
@@ -49,24 +46,29 @@ export function ShortCard({ short }: { short: YouTubeShort }) {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <span className="flex items-center gap-1 text-muted-foreground">
             <Eye className="h-3 w-3" />
-            {formatCompactNumber(m?.views)} views
+            {formatCompactNumber(metrics?.views)} views
           </span>
           <span className="flex items-center gap-1 text-muted-foreground">
             <BarChart3 className="h-3 w-3" />
-            {formatPercentInt(m?.average_view_percentage)}
+            {formatPercentInt(metrics?.average_view_percentage)}
           </span>
         </div>
 
         <div className="flex flex-wrap gap-1">
-          <Badge variant={short.transcript ? "default" : "outline"} className="text-[10px]">
+          <Badge variant={analysisStatus?.has_transcript ? "default" : "outline"} className="text-[10px]">
             <FileText className="mr-1 h-3 w-3" />
-            {short.transcript ? "Transcrito" : "Sem transcricao"}
+            {analysisStatus?.has_transcript ? "Transcrito" : "Sem transcricao"}
           </Badge>
           <Badge variant={analyzed ? "default" : "outline"} className="text-[10px]">
             <Sparkles className="mr-1 h-3 w-3" />
             {analyzed ? "Analisado" : "Nao analisado"}
           </Badge>
-          {short.script_id && <Badge variant="outline" className="text-[10px]">Com roteiro</Badge>}
+          {short.script_link && (
+            <Badge variant="outline" className="text-[10px]">
+              <Link2 className="mr-1 h-3 w-3" />
+              {formatScriptStatus(short.script_link.script_status ?? "draft")}
+            </Badge>
+          )}
         </div>
 
         <Link href={`/youtube/shorts/${short.id}`}>

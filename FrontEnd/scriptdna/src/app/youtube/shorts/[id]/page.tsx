@@ -16,6 +16,7 @@ import { ShortDetailHeader } from "@/features/youtube-short/components/ShortDeta
 import { ShortLearningPanel } from "@/features/youtube-short/components/ShortLearningPanel";
 import { ShortMetricOverview } from "@/features/youtube-short/components/ShortMetricOverview";
 import { ShortNextStepCard } from "@/features/youtube-short/components/ShortNextStepCard";
+import { ShortScriptLinkCard } from "@/features/youtube-short/components/ShortScriptLinkCard";
 import { ShortTranscriptPanel } from "@/features/youtube-short/components/ShortTranscriptPanel";
 import { TimelineAnalysisView } from "@/features/youtube-short/components/TimelineAnalysisView";
 import { AlertCircle } from "lucide-react";
@@ -81,12 +82,30 @@ export default function ShortDetailPage() {
 
   const s = short.data;
   const analysisData = analysis.data;
+  const metricData = metrics.data ?? (s.latest_metrics ? {
+    id: "latest-summary",
+    youtube_short_id: s.id,
+    views: s.latest_metrics.views ?? 0,
+    likes: s.latest_metrics.likes ?? 0,
+    comments: s.latest_metrics.comments ?? 0,
+    shares: s.latest_metrics.shares ?? 0,
+    subscribers_gained: s.latest_metrics.subscribers_gained ?? 0,
+    average_view_duration_seconds: null,
+    average_view_percentage: s.latest_metrics.average_view_percentage,
+    impressions: null,
+    impressions_ctr: null,
+    engagement_rate: s.latest_metrics.engagement_rate,
+    retention_score: null,
+    source: "manual" as const,
+    collected_at: s.latest_metrics.collected_at,
+    published_at: s.published_at,
+  } : null);
 
   return (
     <div className="space-y-6">
       <ShortDetailHeader short={s} />
 
-      <ShortMetricOverview metrics={metrics.data} />
+      <ShortMetricOverview metrics={metricData} />
 
       <ShortActionPanel
         scriptId={s.script_id}
@@ -112,6 +131,7 @@ export default function ShortDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <ShortScriptLinkCard short={s} />
           <ShortNextStepCard short={s} analysis={analysisData} onFetchTranscript={handleFetchTranscript} onAnalyze={handleAnalyze} />
           <ShortLearningPanel learnings={analysisData?.actionable_learnings} />
         </div>

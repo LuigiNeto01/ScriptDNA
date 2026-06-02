@@ -12,6 +12,7 @@ export function useScripts(params?: {
   status?: ScriptStatus;
   niche?: string;
   theme?: string;
+  q?: string;
   limit?: number;
   offset?: number;
 }) {
@@ -19,6 +20,7 @@ export function useScripts(params?: {
   if (params?.status) query.set("status", params.status);
   if (params?.niche) query.set("niche", params.niche);
   if (params?.theme) query.set("theme", params.theme);
+  if (params?.q) query.set("q", params.q);
   if (params?.limit) query.set("limit", String(params.limit));
   if (params?.offset) query.set("offset", String(params.offset));
 
@@ -132,6 +134,7 @@ export function useLinkVideo(scriptId: string) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["script", scriptId] });
+      queryClient.invalidateQueries({ queryKey: ["scripts"] });
     },
   });
 }

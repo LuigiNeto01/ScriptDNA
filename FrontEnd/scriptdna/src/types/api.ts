@@ -361,6 +361,33 @@ export interface YouTubeChannel {
   channel_name?: string;
 }
 
+export interface ShortMetricsSummary {
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  average_view_percentage: number | null;
+  engagement_rate: number | null;
+  subscribers_gained: number | null;
+  collected_at: string | null;
+}
+
+export interface ShortAnalysisStatus {
+  has_transcript: boolean;
+  has_segments: boolean;
+  has_beats?: boolean;
+  has_performance_analysis: boolean;
+  has_timeline_analysis: boolean;
+  has_comments: boolean;
+  has_comment_analysis: boolean;
+}
+
+export interface ShortScriptLink {
+  script_id: string;
+  script_title: string;
+  script_status: ScriptStatus | null;
+}
+
 export interface YouTubeShort {
   id: string;
   youtube_video_id: string;
@@ -374,6 +401,9 @@ export interface YouTubeShort {
   transcript_source: string | null;
   script_id: string | null;
   synced_at: string | null;
+  latest_metrics?: ShortMetricsSummary | null;
+  analysis_status?: ShortAnalysisStatus | null;
+  script_link?: ShortScriptLink | null;
 }
 
 export interface ShortMetrics {
@@ -400,6 +430,13 @@ export interface MetricsHistoryEntry {
   likes: number | null;
   comments: number | null;
   collected_at: string | null;
+}
+
+export interface ShortScriptLinkResponse {
+  short_id: string;
+  script_id: string | null;
+  youtube_video_id: string;
+  message: string;
 }
 
 // === Insights ===

@@ -168,9 +168,36 @@ export const mockShort = {
   transcript_source: "manual",
   script_id: null,
   synced_at: "2024-01-01T00:00:00Z",
-  view_count: 5200,
-  like_count: 340,
-  comment_count: 28,
+  latest_metrics: {
+    views: 5200,
+    likes: 340,
+    comments: 28,
+    shares: 12,
+    average_view_percentage: 72,
+    engagement_rate: 7.2,
+    subscribers_gained: 7,
+    collected_at: "2024-01-02T00:00:00Z",
+  },
+  analysis_status: {
+    has_transcript: true,
+    has_segments: true,
+    has_beats: true,
+    has_performance_analysis: true,
+    has_timeline_analysis: false,
+    has_comments: true,
+    has_comment_analysis: true,
+  },
+  script_link: null,
+};
+
+export const mockShortWithScriptLink = {
+  ...mockShort,
+  script_id: mockScript.id,
+  script_link: {
+    script_id: mockScript.id,
+    script_title: mockScript.title,
+    script_status: mockScript.status,
+  },
 };
 
 export const mockShortMetrics = {
@@ -455,7 +482,7 @@ export const handlers = [
 
   http.get(`${API_URL}/api/youtube/shorts`, () => {
     return HttpResponse.json({
-      data: { items: [mockShort], total: 1, page: 0, limit: 12 },
+      data: { items: [mockShortWithScriptLink], total: 1, page: 0, limit: 12 },
     });
   }),
 
@@ -465,6 +492,29 @@ export const handlers = [
 
   http.get(`${API_URL}/api/youtube/shorts/:id/metrics`, () => {
     return HttpResponse.json({ data: mockShortMetrics });
+  }),
+
+  http.post(`${API_URL}/api/youtube/shorts/:id/link-script`, async ({ request }) => {
+    const body = await request.json() as { script_id?: string };
+    return HttpResponse.json({
+      data: {
+        short_id: mockShort.id,
+        script_id: body.script_id ?? mockScript.id,
+        youtube_video_id: mockShort.youtube_video_id,
+        message: "Short vinculado ao roteiro com sucesso.",
+      },
+    });
+  }),
+
+  http.delete(`${API_URL}/api/youtube/shorts/:id/link-script`, () => {
+    return HttpResponse.json({
+      data: {
+        short_id: mockShort.id,
+        script_id: null,
+        youtube_video_id: mockShort.youtube_video_id,
+        message: "Vinculo do Short removido com sucesso.",
+      },
+    });
   }),
 
   http.get(`${API_URL}/api/youtube/shorts/:id/metrics/history`, () => {

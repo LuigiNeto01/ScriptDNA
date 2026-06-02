@@ -23,6 +23,26 @@ const short: YouTubeShort = {
   transcript_source: "manual",
   script_id: null,
   synced_at: null,
+  latest_metrics: {
+    views: 3200,
+    likes: 180,
+    comments: 22,
+    shares: 8,
+    average_view_percentage: 71,
+    engagement_rate: 6.5,
+    subscribers_gained: 4,
+    collected_at: "2026-01-01T00:00:00Z",
+  },
+  analysis_status: {
+    has_transcript: true,
+    has_segments: true,
+    has_beats: true,
+    has_performance_analysis: false,
+    has_timeline_analysis: false,
+    has_comments: false,
+    has_comment_analysis: false,
+  },
+  script_link: null,
 };
 
 const analysis: PerformanceAnalysis = {
@@ -112,7 +132,20 @@ describe("Phase 7 components", () => {
 
   it("renders next step to generate script after analysis", () => {
     renderWithProviders(
-      <ShortNextStepCard short={short} analysis={analysis} onFetchTranscript={vi.fn()} onAnalyze={vi.fn()} />
+      <ShortNextStepCard
+        short={{
+          ...short,
+          script_id: "script-001",
+          script_link: {
+            script_id: "script-001",
+            script_title: "Roteiro base",
+            script_status: "draft",
+          },
+        }}
+        analysis={analysis}
+        onFetchTranscript={vi.fn()}
+        onAnalyze={vi.fn()}
+      />
     );
     expect(screen.getByText("Criar proximo roteiro")).toBeInTheDocument();
     expect(screen.getByText("Gerar roteiro usando aprendizados")).toBeInTheDocument();

@@ -37,9 +37,20 @@ export function ShortNextStepCard({
     );
   }
 
+  if (!short.script_link?.script_id) {
+    return (
+      <NextStep title="Vincular roteiro" description="Conecte este Short ao roteiro certo para comparar execucao, desvios e sinais que valem repetir.">
+        <Button variant="outline" disabled>
+          <FileText className="h-4 w-4" />
+          Vincule um roteiro na lateral
+        </Button>
+      </NextStep>
+    );
+  }
+
   return (
     <NextStep title="Criar proximo roteiro" description="Use os aprendizados deste Short para gerar uma nova versao mais alinhada ao que segurou atencao.">
-      <Link href={`/generate?goal=Usar aprendizados do Short ${short.id}`}>
+      <Link href={`/generate?goal=Usar aprendizados do Short ${short.id}&script_id=${short.script_link.script_id}`}>
         <Button>
           <PenTool className="h-4 w-4" />
           Gerar roteiro usando aprendizados

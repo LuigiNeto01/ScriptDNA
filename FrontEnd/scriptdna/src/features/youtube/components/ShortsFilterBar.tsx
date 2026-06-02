@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type ShortsFilter = "all" | "analyzed" | "not_analyzed" | "with_transcript" | "without_transcript" | "linked" | "unlinked";
-export type ShortsSort = "recent" | "views" | "retention";
+export type ShortsSort = "recent" | "views" | "retention" | "engagement";
 
 export function ShortsFilterBar({
   filter,
@@ -51,6 +51,7 @@ export function ShortsFilterBar({
           <SelectItem value="recent">Mais recentes</SelectItem>
           <SelectItem value="views">Mais views</SelectItem>
           <SelectItem value="retention">Melhor retencao</SelectItem>
+          <SelectItem value="engagement">Mais engajamento</SelectItem>
         </SelectContent>
       </Select>
     </div>

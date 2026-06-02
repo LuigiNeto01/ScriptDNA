@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,16 @@ export default function YouTubePage() {
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ShortsFilter>("all");
   const [sort, setSort] = useState<ShortsSort>("recent");
-  const shorts = useYouTubeShorts({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+  const shortsQueryParams = useMemo(() => {
+    if (filter === "analyzed") return { has_analysis: true, sort };
+    if (filter === "not_analyzed") return { has_analysis: false, sort };
+    if (filter === "with_transcript") return { has_transcript: true, sort };
+    if (filter === "without_transcript") return { has_transcript: false, sort };
+    if (filter === "linked") return { has_script: true, sort };
+    if (filter === "unlinked") return { has_script: false, sort };
+    return { sort };
+  }, [filter, sort]);
+  const shorts = useYouTubeShorts({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, ...shortsQueryParams });
   const syncShorts = useSyncShorts();
   const connectYouTube = useConnectYouTube();
   const syncTask = useTaskStatus(syncTaskId);
@@ -44,24 +52,7 @@ export default function YouTubePage() {
     });
   }
 
-  const visibleShorts = useMemo(() => {
-    const items = [...(shorts.data?.items ?? [])];
-    const filtered = items.filter((short) => {
-      if (filter === "with_transcript") return !!short.transcript;
-      if (filter === "without_transcript") return !short.transcript;
-      if (filter === "linked") return !!short.script_id;
-      if (filter === "unlinked") return !short.script_id;
-      // Analysis and metrics are fetched inside cards today, so these two filters stay conservative.
-      return true;
-    });
-
-    return filtered.sort((a, b) => {
-      if (sort === "recent") {
-        return new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime();
-      }
-      return 0;
-    });
-  }, [filter, shorts.data?.items, sort]);
+  const visibleShorts = shorts.data?.items ?? [];
 
   return (
     <div className="space-y-6">
