@@ -1,59 +1,56 @@
 "use client";
 
 import { useInternalTrends, useGenerateWeeklyStrategy } from "@/hooks/use-strategy";
-import { TrendCards } from "@/components/strategy/trend-cards";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, AlertCircle } from "lucide-react";
+import { StrategyPageHeader } from "@/features/strategy/components/StrategyPageHeader";
+import { WeeklyStrategyPanel } from "@/features/strategy/components/WeeklyStrategyPanel";
+import { TrendCard } from "@/features/strategy/components/TrendCard";
+import { StrategyEmptyState } from "@/features/strategy/components/StrategyEmptyState";
 
 export default function StrategyPage() {
   const trends = useInternalTrends();
   const generateWeekly = useGenerateWeeklyStrategy();
 
+  const taskId = (
+    generateWeekly.data as { data: { task_id: string } } | undefined
+  )?.data?.task_id;
+
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Estrategia</h1>
-          <p className="text-muted-foreground">
-            Tendencias internas e relatorio estrategico semanal.
-          </p>
-        </div>
-        <Button
-          onClick={() => generateWeekly.mutate()}
-          disabled={generateWeekly.isPending}
-        >
-          {generateWeekly.isPending ? "Gerando..." : "Gerar Relatorio Semanal"}
-        </Button>
-      </div>
+      <StrategyPageHeader
+        onGenerate={() => generateWeekly.mutate()}
+        isGenerating={generateWeekly.isPending}
+      />
 
-      {generateWeekly.isSuccess && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Relatorio Enviado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              O relatorio estrategico semanal esta sendo gerado. Acompanhe o progresso na aba de tarefas.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Task ID: {(generateWeekly.data as { data: { task_id: string } })?.data?.task_id}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <WeeklyStrategyPanel taskId={taskId} isSuccess={generateWeekly.isSuccess} />
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold">Tendencias Internas</h2>
-        <TrendCards
-          data={trends.data}
-          isLoading={trends.isLoading}
-          isError={trends.isError}
-        />
+        <h2 className="mb-2 text-xl font-semibold">Tendências do canal</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Métricas em movimento nos seus Shorts mais recentes vs. a média anterior.
+        </p>
+
+        {trends.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : trends.isError ? (
+          <Card>
+            <CardContent className="flex items-center gap-2 py-4 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <span>Erro ao carregar tendências</span>
+            </CardContent>
+          </Card>
+        ) : !trends.data?.length ? (
+          <StrategyEmptyState />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="trends-grid">
+            {trends.data.map((trend) => (
+              <TrendCard key={trend.metric} trend={trend} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

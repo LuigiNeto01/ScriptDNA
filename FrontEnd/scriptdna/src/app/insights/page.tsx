@@ -1,110 +1,78 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useInsights, useToggleInsight, useGenerateInsights } from "@/hooks/use-insights";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lightbulb, Loader2, AlertCircle, Sparkles, ToggleLeft, ToggleRight } from "lucide-react";
-import type { InsightCategory, InsightSentiment } from "@/types/api";
-
-const CATEGORY_LABELS: Record<InsightCategory, string> = {
-  hook: "Hook",
-  retention: "Retencao",
-  cta: "CTA",
-  narrative: "Narrativa",
-  topic: "Topico",
-  speaking_style: "Estilo",
-  timing: "Timing",
-  audience: "Audiencia",
-  general: "Geral",
-};
-
-const SENTIMENT_COLORS: Record<InsightSentiment, "default" | "destructive" | "secondary"> = {
-  positive: "default",
-  negative: "destructive",
-  neutral: "secondary",
-};
-
-const SENTIMENT_LABELS: Record<InsightSentiment, string> = {
-  positive: "Positivo",
-  negative: "Negativo",
-  neutral: "Neutro",
-};
+import { Card, CardContent } from "@/components/ui/card";
+import { EducationalEmptyState } from "@/components/feedback/educational-empty-state";
+import { LinkButton } from "@/components/ui/link-button";
+import { InsightsPageHeader } from "@/features/insights/components/InsightsPageHeader";
+import {
+  InsightFilterBar,
+  type SentimentGroup,
+  type ConfidenceFilter,
+} from "@/features/insights/components/InsightFilterBar";
+import { InsightGroupSection } from "@/features/insights/components/InsightGroupSection";
+import { Loader2, AlertCircle } from "lucide-react";
+import type { InsightCategory } from "@/types/api";
 
 export default function InsightsPage() {
+  const [sentimentGroup, setSentimentGroup] = useState<SentimentGroup>("all");
   const [categoryFilter, setCategoryFilter] = useState<InsightCategory | "all">("all");
-  const [sentimentFilter, setSentimentFilter] = useState<InsightSentiment | "all">("all");
   const [activeOnly, setActiveOnly] = useState(true);
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all");
+  const [nicheFilter, setNicheFilter] = useState("");
 
   const insights = useInsights({
     category: categoryFilter === "all" ? undefined : categoryFilter,
-    sentiment: sentimentFilter === "all" ? undefined : sentimentFilter,
     active_only: activeOnly,
+    niche: nicheFilter.trim() || undefined,
   });
   const toggleInsight = useToggleInsight();
   const generateInsights = useGenerateInsights();
 
+  const handleToggle = (id: string, is_active: boolean) => {
+    toggleInsight.mutate({ id, is_active });
+  };
+
+  const filtered = useMemo(() => {
+    const list = insights.data?.items ?? [];
+    return list.filter((insight) => {
+      if (sentimentGroup !== "all" && insight.sentiment !== sentimentGroup) return false;
+      if (confidenceFilter === "high" && insight.confidence < 0.8) return false;
+      if (
+        confidenceFilter === "medium" &&
+        (insight.confidence < 0.5 || insight.confidence >= 0.8)
+      )
+        return false;
+      if (confidenceFilter === "low" && insight.confidence >= 0.5) return false;
+      return true;
+    });
+  }, [insights.data?.items, sentimentGroup, confidenceFilter]);
+
+  const positive = filtered.filter((i) => i.sentiment === "positive");
+  const negative = filtered.filter((i) => i.sentiment === "negative");
+  const neutral = filtered.filter((i) => i.sentiment === "neutral");
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
-          <p className="text-muted-foreground">Aprendizados extraidos do seu canal</p>
-        </div>
-        <Button
-          onClick={() => generateInsights.mutate()}
-          disabled={generateInsights.isPending}
-        >
-          {generateInsights.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="mr-2 h-4 w-4" />
-          )}
-          Gerar Insights
-        </Button>
-      </div>
+      <InsightsPageHeader
+        onGenerate={() => generateInsights.mutate()}
+        isGenerating={generateInsights.isPending}
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as InsightCategory | "all")}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            {Object.entries(CATEGORY_LABELS).map(([val, label]) => (
-              <SelectItem key={val} value={val}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <InsightFilterBar
+        sentimentGroup={sentimentGroup}
+        onSentimentGroupChange={setSentimentGroup}
+        categoryFilter={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+        activeOnly={activeOnly}
+        onActiveOnlyChange={setActiveOnly}
+        confidenceFilter={confidenceFilter}
+        onConfidenceChange={setConfidenceFilter}
+        nicheFilter={nicheFilter}
+        onNicheChange={setNicheFilter}
+      />
 
-        <Select value={sentimentFilter} onValueChange={(v) => setSentimentFilter(v as InsightSentiment | "all")}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Sentimento" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(SENTIMENT_LABELS).map(([val, label]) => (
-              <SelectItem key={val} value={val}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button
-          variant={activeOnly ? "default" : "outline"}
-          size="sm"
-          onClick={() => setActiveOnly(!activeOnly)}
-          className="h-10"
-        >
-          {activeOnly ? <ToggleRight className="mr-2 h-4 w-4" /> : <ToggleLeft className="mr-2 h-4 w-4" />}
-          {activeOnly ? "Ativos" : "Todos"}
-        </Button>
-      </div>
-
-      {/* Insights List */}
       {insights.isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -113,75 +81,47 @@ export default function InsightsPage() {
         <Card>
           <CardContent className="flex items-center gap-2 py-4 text-destructive">
             <AlertCircle className="h-5 w-5" />
-            <span>Erro ao carregar insights</span>
+            <span>Erro ao carregar aprendizados</span>
           </CardContent>
         </Card>
-      ) : !insights.data?.items?.length ? (
-        <EmptyState
-          icon={Lightbulb}
-          title="Nenhum insight encontrado"
-          description="Gere insights a partir das analises de performance dos seus Shorts."
-          action={
-            <Button onClick={() => generateInsights.mutate()} disabled={generateInsights.isPending}>
-              Gerar Insights
-            </Button>
-          }
+      ) : !filtered.length ? (
+        <EducationalEmptyState
+          variant="no-insights"
+          title="A IA ainda não tem aprendizados suficientes"
+          description="Analise seus Shorts para descobrir padrões do que funciona no seu canal."
+          tips={[
+            "Analise pelo menos 3 Shorts para gerar os primeiros aprendizados",
+            "Aprendizados ativos são usados automaticamente na geração de roteiros",
+            "Você pode ativar ou desativar aprendizados individualmente",
+          ]}
+          action={<LinkButton href="/youtube">Analisar Shorts</LinkButton>}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {insights.data.items.map((insight) => (
-            <Card key={insight.id} className={!insight.is_active ? "opacity-60" : ""}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-base">{insight.title}</CardTitle>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Badge variant={SENTIMENT_COLORS[insight.sentiment]}>
-                      {SENTIMENT_LABELS[insight.sentiment]}
-                    </Badge>
-                    <Badge variant="outline">{CATEGORY_LABELS[insight.category]}</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">{insight.description}</p>
-
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>Confianca: <strong>{Math.round(insight.confidence * 100)}%</strong></span>
-                  <span>Validado: <strong>{insight.times_validated}x</strong></span>
-                  {insight.niche && <span>Nicho: {insight.niche}</span>}
-                </div>
-
-                {insight.evidence && insight.evidence.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    <span className="font-medium">Evidencias:</span>
-                    <ul className="mt-1 space-y-0.5">
-                      {insight.evidence.slice(0, 3).map((e, i) => (
-                        <li key={i}>{e.metric}: {e.value}{e.context ? ` — ${e.context}` : ""}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center pt-1">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(insight.updated_at).toLocaleDateString("pt-BR")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleInsight.mutate({ id: insight.id, is_active: !insight.is_active })}
-                    disabled={toggleInsight.isPending}
-                  >
-                    {insight.is_active ? (
-                      <><ToggleRight className="mr-1 h-4 w-4" /> Ativo</>
-                    ) : (
-                      <><ToggleLeft className="mr-1 h-4 w-4" /> Inativo</>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-8" data-testid="insights-grouped">
+          <InsightGroupSection
+            title="O que repetir"
+            description="Padrões que funcionaram bem no seu canal — repita nos próximos vídeos."
+            insights={positive}
+            onToggle={handleToggle}
+            isToggling={toggleInsight.isPending}
+            colorClass="border-green-500/60 bg-green-500/5"
+          />
+          <InsightGroupSection
+            title="O que evitar"
+            description="Padrões que prejudicaram o desempenho — evite nos próximos vídeos."
+            insights={negative}
+            onToggle={handleToggle}
+            isToggling={toggleInsight.isPending}
+            colorClass="border-red-500/60 bg-red-500/5"
+          />
+          <InsightGroupSection
+            title="Pontos de atenção"
+            description="Padrões com resultados mistos — avalie caso a caso."
+            insights={neutral}
+            onToggle={handleToggle}
+            isToggling={toggleInsight.isPending}
+            colorClass="border-amber-500/60 bg-amber-500/5"
+          />
         </div>
       )}
     </div>
