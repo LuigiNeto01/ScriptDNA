@@ -3,8 +3,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.script import Script, ScriptStatus, ScriptVersion
@@ -18,6 +16,7 @@ from app.schemas.script import (
     ScriptUpdateInput,
     VersionCreateInput,
 )
+from app.services.short_script_link_service import link_short_to_script, unlink_short_from_script
 
 router = APIRouter()
 
@@ -68,6 +67,7 @@ async def list_scripts(
     status_filter: ScriptStatus | None = Query(None, alias="status"),
     niche: str | None = None,
     theme: str | None = None,
+    q: str | None = None,
     limit: int = Query(20, le=100),
     offset: int = 0,
 ):
@@ -79,6 +79,12 @@ async def list_scripts(
         query = query.where(Script.niche == niche)
     if theme:
         query = query.where(Script.theme.ilike(f"%{theme}%"))
+    if q:
+        query = query.where(
+            Script.title.ilike(f"%{q}%")
+            | Script.theme.ilike(f"%{q}%")
+            | Script.niche.ilike(f"%{q}%")
+        )
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -296,17 +302,15 @@ async def _sync_script_short_link(
     user_id: uuid.UUID,
     db: AsyncSession,
 ) -> None:
-    old_link_result = await db.execute(
-        select(YouTubeShort).where(
-            YouTubeShort.user_id == user_id,
-            YouTubeShort.script_id == script.id,
-        )
-    )
-    for old_short in old_link_result.scalars().all():
-        if old_short.youtube_video_id != youtube_video_id:
-            old_short.script_id = None
-
     if not youtube_video_id:
+        old_link_result = await db.execute(
+            select(YouTubeShort).where(
+                YouTubeShort.user_id == user_id,
+                YouTubeShort.script_id == script.id,
+            )
+        )
+        for old_short in old_link_result.scalars().all():
+            await unlink_short_from_script(short=old_short, user_id=user_id, db=db)
         return
 
     short_result = await db.execute(
@@ -319,7 +323,7 @@ async def _sync_script_short_link(
     if not short:
         raise HTTPException(status_code=404, detail="YouTube Short not found")
 
-    short.script_id = script.id
+    await link_short_to_script(short=short, script=script, user_id=user_id, db=db)
 
 
 def _script_to_dict(script: Script) -> dict:

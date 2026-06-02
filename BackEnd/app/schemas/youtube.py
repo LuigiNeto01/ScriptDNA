@@ -40,6 +40,9 @@ class YouTubeShortOut(BaseModel):
     transcript_source: str | None
     script_id: str | None
     synced_at: str | None
+    latest_metrics: dict | None = None
+    analysis_status: dict | None = None
+    script_link: dict | None = None
 
     model_config = {"from_attributes": True}
 
@@ -63,3 +66,7 @@ class ShortMetricsOut(BaseModel):
     published_at: str | None
 
     model_config = {"from_attributes": True}
+
+
+class ShortScriptLinkInput(BaseModel):
+    script_id: str
